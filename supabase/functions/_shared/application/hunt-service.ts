@@ -117,7 +117,13 @@ export class HuntService {
       if (knownFingerprints.has(fingerprint) || seenThisRun.has(fingerprint)) {
         stats.duplicatesSkipped++;
         // Se guarda como descartado para que no vuelva a evaluarse en cada corrida.
-        const asListing: ListingDetail = { ...candidate.summary, descriptionText: candidate.summary.shortDescription };
+        const asListing: ListingDetail = {
+          ...candidate.summary,
+          descriptionText: candidate.summary.shortDescription,
+          sellerDescription: "",
+          aspects: [],
+          additionalImages: [],
+        };
         await this.dealRepository.save(
           this.toEvaluatedDeal(candidate, asListing, false, "duplicate_listing", null, false),
         );
@@ -137,6 +143,9 @@ export class HuntService {
         const preScreen: ListingDetail = {
           ...candidate.summary,
           descriptionText: candidate.summary.shortDescription,
+          sellerDescription: "",
+          aspects: [],
+          additionalImages: [],
         };
         const preScreenResult = evaluateExclusions(exclusionRules, preScreen);
         if (!preScreenResult.qualifies) {
@@ -242,6 +251,9 @@ export class HuntService {
       isAuction: listing.buyingOptions.includes("AUCTION"),
       hasBestOffer: listing.buyingOptions.includes("BEST_OFFER"),
       endDate: listing.endDate,
+      sellerDescription: listing.sellerDescription,
+      aspects: listing.aspects,
+      additionalImages: listing.additionalImages,
       sellerUsername: listing.sellerUsername,
       sellerFeedbackScore: listing.sellerFeedbackScore,
       sellerFeedbackPercentage: listing.sellerFeedbackPercentage,

@@ -29,7 +29,12 @@ interface EbayItemSummaryDto {
 interface EbayItemDetailDto extends EbayItemSummaryDto {
   description?: string;
   localizedAspects?: { type?: string; name?: string; value?: string }[];
+  additionalImages?: { imageUrl?: string }[];
 }
+
+// Las descripciones de eBay suelen ser plantillas gigantes; con esto alcanza de
+// sobra para leer lo que el vendedor realmente dice del equipo.
+const MAX_DESCRIPTION_CHARS = 4000;
 
 function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
   return {
@@ -132,14 +137,27 @@ export class EbayMarketplaceClient implements MarketplaceClient {
 
     const dto = (await res.json()) as EbayItemDetailDto;
     const summary = toListingSummary(dto);
+    const sellerDescription = stripHtml(dto.description ?? "").slice(0, MAX_DESCRIPTION_CHARS);
+    const aspects = (dto.localizedAspects ?? [])
+      .filter((a) => a.name && a.value)
+      .map((a) => ({ name: a.name!, value: a.value! }));
+
     // Los item specifics (Processor, Battery, RAM...) suelen tener datos que no
     // están en la descripción libre, así que entran al mismo texto que evalúan
     // las reglas y el scoring.
-    const descriptionText = [stripHtml(dto.description ?? ""), summary.shortDescription, aspectsToText(dto)]
+    const descriptionText = [sellerDescription, summary.shortDescription, aspectsToText(dto)]
       .filter((part) => part.length > 0)
       .join(". ");
 
-    return { ...summary, descriptionText };
+    return {
+      ...summary,
+      descriptionText,
+      sellerDescription,
+      aspects,
+      additionalImages: (dto.additionalImages ?? [])
+        .map((img) => img.imageUrl)
+        .filter((url): url is string => Boolean(url)),
+    };
   }
 }
 

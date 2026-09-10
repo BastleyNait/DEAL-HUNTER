@@ -25,8 +25,21 @@ export interface ListingSummary {
   sellerFeedbackPercentage: number | null;
 }
 
+export interface ListingAspect {
+  name: string;
+  value: string;
+}
+
 export interface ListingDetail extends ListingSummary {
+  /** Descripción + shortDescription + item specifics, todo junto: es lo que
+   *  evalúan las reglas y el scoring. */
   descriptionText: string;
+  /** Solo la descripción del vendedor, para mostrarla tal cual en el dashboard. */
+  sellerDescription: string;
+  /** Item specifics (Processor, RAM, Screen Size...) como pares nombre/valor. */
+  aspects: ListingAspect[];
+  /** Resto de las fotos de la publicación, además de imageUrl. */
+  additionalImages: string[];
 }
 
 export interface SearchPage {
@@ -133,6 +146,10 @@ export interface EvaluatedDeal {
   sellerFeedbackPercentage: number | null;
   /** Título normalizado + precio: detecta republicaciones del mismo equipo. */
   fingerprint: string;
+  // Para la vista de detalle del dashboard.
+  sellerDescription: string;
+  aspects: ListingAspect[];
+  additionalImages: string[];
 }
 
 /** Puerto: persistencia de ofertas ya evaluadas (hoy Supabase, mañana lo que sea). */

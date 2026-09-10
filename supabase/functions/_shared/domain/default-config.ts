@@ -189,6 +189,14 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       pattern: "batt(?:ery)?\\s*(health|condition)?\\s*[:\\-]?\\s*(fair|poor|bad)\\b",
       flags: "i",
     },
+    {
+      // Daño declarado sin ambigüedad. A diferencia de las muletillas tipo
+      // "may show signs of wear", estas son afirmaciones concretas del
+      // vendedor, así que sí valen contra la descripción.
+      reason: "declared_damage",
+      pattern: "\\bdamage\\s+such\\s+as\\b|\\b(?:have|has|with)\\s+damage\\b|\\bdisplay\\s+blemish",
+      flags: "i",
+    },
   ],
   // Solo contra el título: el objetivo es revender rápido, así que cualquier
   // defecto declarado (pantalla, teclado, golpes) descarta el equipo.
@@ -202,6 +210,13 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     {
       reason: "bios_locked",
       pattern: "\\bbios\\s*(?:is\\s*)?(?:locked|password)\\b|\\blocked\\s*to\\s*bios\\b",
+      flags: "i",
+    },
+    {
+      // Grado del equipo entero (no de la batería): D y F son daño declarado.
+      // C queda afuera a propósito — esas se marcan para revisar, no se tiran.
+      reason: "low_grade_unit",
+      pattern: "\\b[df][\\s-]?grade\\b|\\bgrade\\s*[-:]?\\s*[df]\\b",
       flags: "i",
     },
     {
