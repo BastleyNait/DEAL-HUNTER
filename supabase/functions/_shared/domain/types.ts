@@ -16,6 +16,8 @@ export interface ListingSummary {
   // Viene gratis en la búsqueda con fieldgroups=EXTENDED. Sirve para matchear
   // CPU y pre-descartar basura antes de gastar una llamada de detalle.
   shortDescription: string;
+  /** Cierre de la subasta (ISO). Null en publicaciones a precio fijo. */
+  endDate: string | null;
 }
 
 export interface ListingDetail extends ListingSummary {
@@ -117,6 +119,8 @@ export interface EvaluatedDeal {
   batteryGrade: string | null;
   // true si es subasta: el precio guardado es el actual/mínimo, no el final.
   isAuction: boolean;
+  /** Cierre de la subasta (ISO), para poder priorizar las que están por terminar. */
+  endDate: string | null;
   /** Título normalizado + precio: detecta republicaciones del mismo equipo. */
   fingerprint: string;
 }
@@ -132,8 +136,11 @@ export interface DealRepository {
 /** Puerto: un canal de notificación (Telegram hoy; push/WhatsApp mañana). */
 export interface NotificationChannel {
   notify(deal: EvaluatedDeal): Promise<void>;
-  /** Resumen agregado cuando hay más ofertas que las que se avisan una por una. */
-  notifySummary(text: string): Promise<void>;
+  /**
+   * Resumen de las ofertas que no se avisan una por una. Recibe las ofertas,
+   * no texto ya armado: cómo se ven es decisión del canal, no de la aplicación.
+   */
+  notifyDigest(deals: EvaluatedDeal[]): Promise<void>;
 }
 
 export interface RunStats {

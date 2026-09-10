@@ -28,14 +28,42 @@ function formatMessage(deal: EvaluatedDeal): string {
   return lines.join("\n");
 }
 
+const DIGEST_MAX_ITEMS = 12;
+
+/**
+ * Cada línea del resumen tiene que poder accionarse sola: precio, equipo y un
+ * link directo a la publicación. Un listado de precios sueltos sin título ni
+ * link no sirve para decidir nada.
+ */
+function formatDigest(deals: EvaluatedDeal[]): string {
+  const shown = deals.slice(0, DIGEST_MAX_ITEMS);
+  const lines = [`📋 <b>${deals.length} oferta(s) más</b> en esta pasada`, ``];
+
+  for (const deal of shown) {
+    const title = deal.title.length > 58 ? `${deal.title.slice(0, 57)}…` : deal.title;
+    const tags = [deal.cpuMatch, deal.isAuction ? "subasta" : null].filter(Boolean).join(" · ");
+    lines.push(
+      `<b>$${deal.price ?? "?"}</b> · ${tags} · ${deal.score ?? "?"}/100`,
+      `<a href="${deal.url}">${escapeHtml(title)}</a>`,
+      ``,
+    );
+  }
+
+  if (deals.length > shown.length) {
+    lines.push(`…y ${deals.length - shown.length} más en el dashboard`);
+  }
+
+  return lines.join("\n");
+}
+
 /** Canal de notificación por Telegram. Implementá otro NotificationChannel (push, WhatsApp) sin tocar esto. */
 export class TelegramNotificationChannel implements NotificationChannel {
   notify(deal: EvaluatedDeal): Promise<void> {
     return this.send(formatMessage(deal), false);
   }
 
-  notifySummary(text: string): Promise<void> {
-    return this.send(text, true);
+  notifyDigest(deals: EvaluatedDeal[]): Promise<void> {
+    return this.send(formatDigest(deals), true);
   }
 
   private async send(text: string, disablePreview: boolean): Promise<void> {

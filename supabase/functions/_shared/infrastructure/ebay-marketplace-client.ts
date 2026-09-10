@@ -22,6 +22,7 @@ interface EbayItemSummaryDto {
   conditionId?: string;
   buyingOptions?: string[];
   shortDescription?: string;
+  itemEndDate?: string;
 }
 
 interface EbayItemDetailDto extends EbayItemSummaryDto {
@@ -41,6 +42,7 @@ function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
     conditionId: dto.conditionId ?? null,
     buyingOptions: dto.buyingOptions ?? [],
     shortDescription: stripHtml(dto.shortDescription ?? ""),
+    endDate: dto.itemEndDate ?? null,
   };
 }
 

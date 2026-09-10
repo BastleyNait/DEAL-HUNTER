@@ -205,16 +205,10 @@ export class HuntService {
     const rest = deals.filter((d) => !individualIds.has(d.itemId));
     if (rest.length === 0) return;
 
-    const cheapest = [...rest].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity)).slice(0, 5);
-    const lines = [
-      `📋 ${rest.length} oferta(s) más encontradas (ver dashboard)`,
-      ``,
-      ...cheapest.map((d) => `• $${d.price ?? "?"} — ${d.cpuMatch} — puntaje ${d.score ?? "?"}`),
-    ];
-    if (rest.length > cheapest.length) lines.push(`…y ${rest.length - cheapest.length} más`);
-
     try {
-      await this.notificationChannel.notifySummary(lines.join("\n"));
+      await this.notificationChannel.notifyDigest(
+        [...rest].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity)),
+      );
     } catch (err) {
       console.error("Falló la notificación de resumen:", err);
     }
@@ -246,6 +240,7 @@ export class HuntService {
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),
       isAuction: listing.buyingOptions.includes("AUCTION"),
+      endDate: listing.endDate,
       fingerprint: listingFingerprint(listing.title, listing.price),
     };
   }
