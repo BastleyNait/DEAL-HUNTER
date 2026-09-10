@@ -1,0 +1,31 @@
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import type { DealRepository, EvaluatedDeal } from "../domain/types.ts";
+
+export class SupabaseDealRepository implements DealRepository {
+  constructor(private readonly supabase: SupabaseClient) {}
+
+  async filterUnseen(itemIds: string[]): Promise<string[]> {
+    if (itemIds.length === 0) return [];
+    const { data } = await this.supabase.from("seen_listings").select("item_id").in("item_id", itemIds);
+    const seen = new Set((data ?? []).map((r) => r.item_id as string));
+    return itemIds.filter((id) => !seen.has(id));
+  }
+
+  async save(deal: EvaluatedDeal): Promise<void> {
+    await this.supabase.from("seen_listings").upsert({
+      item_id: deal.itemId,
+      title: deal.title,
+      price: deal.price,
+      currency: deal.currency,
+      condition: deal.condition,
+      cpu_match: deal.cpuMatch,
+      qualified: deal.qualified,
+      reject_reason: deal.rejectReason ?? null,
+      url: deal.url,
+      image_url: deal.imageUrl,
+      score: deal.score,
+      is_great_deal: deal.isGreatDeal,
+      notified_at: deal.qualified ? new Date().toISOString() : null,
+    });
+  }
+}
