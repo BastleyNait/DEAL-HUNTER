@@ -11,6 +11,8 @@ export interface ListingSummary {
   url: string;
   imageUrl: string | null;
   condition: string | null;
+  conditionId: string | null;
+  buyingOptions: string[];
 }
 
 export interface ListingDetail extends ListingSummary {
@@ -85,6 +87,16 @@ export interface EvaluatedDeal {
   rejectReason?: string;
   score: number | null;
   isGreatDeal: boolean;
+  // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
+  // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
+  // buena batería/specs y simplemente no lo puso en el texto.
+  hasDescription: boolean;
+  hasBatteryInfo: boolean;
+  // Batería calificada por letra (ej. "Battery Grade C") — no sabemos la escala
+  // de cada vendedor, así que tampoco descarta: se guarda para revisar a mano.
+  batteryGrade: string | null;
+  // true si es subasta: el precio guardado es el actual/mínimo, no el final.
+  isAuction: boolean;
 }
 
 /** Puerto: persistencia de ofertas ya evaluadas (hoy Supabase, mañana lo que sea). */
@@ -132,7 +144,13 @@ export interface ExcludePatternConfig {
 export interface SearchConfig {
   marketplaceId: string;
   categoryId: string;
+  deliveryCountry: string;
   maxPriceUsd: number;
+  // Excepción para reacondicionados con "Best Offer": el precio de lista puede
+  // llegar hasta acá, porque la intención es negociar por debajo de maxPriceUsd
+  // antes de comprar (ver rules/exclusion-rules.ts -> priceEligibilityRule).
+  refurbishedExceptionMaxPrice: number;
+  refurbishedConditionIds: number[];
   greatDealMaxPrice: number;
   greatDealMinScore: number;
   includedConditionIds: number[];

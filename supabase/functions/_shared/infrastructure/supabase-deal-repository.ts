@@ -25,6 +25,10 @@ export class SupabaseDealRepository implements DealRepository {
       image_url: deal.imageUrl,
       score: deal.score,
       is_great_deal: deal.isGreatDeal,
+      has_description: deal.hasDescription,
+      has_battery_info: deal.hasBatteryInfo,
+      battery_grade: deal.batteryGrade,
+      is_auction: deal.isAuction,
       notified_at: deal.qualified ? new Date().toISOString() : null,
     });
   }

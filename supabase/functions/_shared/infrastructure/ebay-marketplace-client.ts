@@ -12,6 +12,8 @@ interface EbayItemSummaryDto {
   itemWebUrl: string;
   image?: { imageUrl: string };
   condition?: string;
+  conditionId?: string;
+  buyingOptions?: string[];
 }
 
 interface EbayItemDetailDto extends EbayItemSummaryDto {
@@ -28,15 +30,22 @@ function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
     url: dto.itemWebUrl,
     imageUrl: dto.image?.imageUrl ?? null,
     condition: dto.condition ?? null,
+    conditionId: dto.conditionId ?? null,
+    buyingOptions: dto.buyingOptions ?? [],
   };
 }
 
 function buildFilter(config: SearchConfig): string {
+  // El techo de precio va hasta refurbishedExceptionMaxPrice (>= maxPriceUsd)
+  // para que eBay nos devuelva también los reacondicionados con Best Offer que
+  // se evalúan en priceEligibilityRule; el resto de los casos se filtran ahí.
+  const priceCeiling = Math.max(config.maxPriceUsd, config.refurbishedExceptionMaxPrice);
   const parts = [
-    `price:[..${config.maxPriceUsd}]`,
+    `price:[..${priceCeiling}]`,
     `priceCurrency:USD`,
     `conditionIds:{${config.includedConditionIds.join("|")}}`,
     `buyingOptions:{${config.includeAuctions ? "FIXED_PRICE|AUCTION" : "FIXED_PRICE"}}`,
+    `deliveryCountry:${config.deliveryCountry}`,
   ];
   return parts.join(",");
 }

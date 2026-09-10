@@ -13,6 +13,39 @@ export function extractBatteryPercent(text: string): number | null {
   return pct;
 }
 
+const BATTERY_MENTION_RE = /batt(?:ery)?/i;
+
+/** true si el texto menciona la batería de alguna forma (con o sin %/estado). */
+export function mentionsBattery(text: string): boolean {
+  return BATTERY_MENTION_RE.test(text);
+}
+
+// Nunca cruza una coma: evita mezclar "Cosmetic Grade B, Battery Grade D"
+// (acá D es de batería, no B) con la instancia equivocada de "Grade X".
+const BATTERY_GRADE_RE = /batt(?:ery)?[^\n,]{0,12}grade[ :]{0,2}\b([a-f])\b|grade[ :]{0,2}\b([a-f])\b[^\n,]{0,3}batt(?:ery)?/i;
+
+/** Devuelve la letra (A-F, mayúscula) si el vendedor calificó la batería con un grado, o null. */
+export function extractBatteryGrade(text: string): string | null {
+  const m = text.match(BATTERY_GRADE_RE);
+  if (!m) return null;
+  return (m[1] ?? m[2]).toUpperCase();
+}
+
+// No sabemos la escala exacta de cada vendedor, pero A/B se asumen aceptables;
+// C, D y F son las que pediste marcar para revisar a mano.
+const GRADES_TO_REVIEW = new Set(["C", "D", "F"]);
+
+export function needsBatteryGradeReview(grade: string | null): boolean {
+  return grade !== null && GRADES_TO_REVIEW.has(grade);
+}
+
+const MIN_DESCRIPTION_LENGTH = 20;
+
+/** true si el vendedor puso una descripción con contenido real (no vacía/boilerplate corta). */
+export function hasMeaningfulDescription(descriptionText: string): boolean {
+  return descriptionText.trim().length >= MIN_DESCRIPTION_LENGTH;
+}
+
 const RAM_RE = /(\d{1,3})\s?gb\s*ram|ram\s*[:\-]?\s*(\d{1,3})\s?gb/i;
 
 /** Devuelve los GB de RAM mencionados, o 0 si no se detecta. */

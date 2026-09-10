@@ -1,4 +1,5 @@
 import type { EvaluatedDeal, NotificationChannel } from "../domain/types.ts";
+import { needsBatteryGradeReview } from "../domain/hardware-signals.ts";
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -6,14 +7,25 @@ function escapeHtml(s: string): string {
 
 function formatMessage(deal: EvaluatedDeal): string {
   const header = deal.isGreatDeal ? "🚨 <b>OFERTAZA</b>" : "🔥 <b>Oferta encontrada</b>";
-  return [
-    `${header} — ${deal.cpuMatch} (puntaje ${deal.score ?? "?"}/100)`,
+  const auctionTag = deal.isAuction ? " 🔨 Subasta" : "";
+  const missing: string[] = [];
+  if (!deal.hasDescription) missing.push("sin descripción");
+  if (!deal.hasBatteryInfo) missing.push("sin dato de batería");
+  if (needsBatteryGradeReview(deal.batteryGrade)) missing.push(`batería grado ${deal.batteryGrade}`);
+
+  const lines = [
+    `${header} — ${deal.cpuMatch} (puntaje ${deal.score ?? "?"}/100)${auctionTag}`,
     ``,
     `<b>${escapeHtml(deal.title)}</b>`,
-    `💵 ${deal.price ?? "?"} ${deal.currency}${deal.condition ? ` · ${escapeHtml(deal.condition)}` : ""}`,
-    ``,
-    deal.url,
-  ].join("\n");
+    `💵 ${deal.price ?? "?"} ${deal.currency}${deal.isAuction ? " (precio actual, no final)" : ""}${deal.condition ? ` · ${escapeHtml(deal.condition)}` : ""}`,
+  ];
+
+  if (missing.length > 0) {
+    lines.push(`⚠️ ${missing.join(" · ")} — revisar la publicación antes de comprar`);
+  }
+
+  lines.push(``, deal.url);
+  return lines.join("\n");
 }
 
 /** Canal de notificación por Telegram. Implementá otro NotificationChannel (push, WhatsApp) sin tocar esto. */

@@ -10,6 +10,7 @@ import type {
 } from "../domain/types.ts";
 import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
 import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
+import { extractBatteryGrade, hasMeaningfulDescription, mentionsBattery } from "../domain/hardware-signals.ts";
 
 /**
  * Orquesta una corrida completa: buscar -> matchear CPU -> filtrar ya vistos ->
@@ -84,6 +85,10 @@ export class HuntService {
         rejectReason: reason,
         score,
         isGreatDeal,
+        hasDescription: hasMeaningfulDescription(detail.descriptionText),
+        hasBatteryInfo: mentionsBattery(`${detail.title} ${detail.descriptionText}`),
+        batteryGrade: extractBatteryGrade(`${detail.title} ${detail.descriptionText}`),
+        isAuction: detail.buyingOptions.includes("AUCTION"),
       };
 
       await this.dealRepository.save(evaluatedDeal);
