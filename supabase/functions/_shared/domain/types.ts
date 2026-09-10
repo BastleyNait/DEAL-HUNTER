@@ -18,6 +18,11 @@ export interface ListingSummary {
   shortDescription: string;
   /** Cierre de la subasta (ISO). Null en publicaciones a precio fijo. */
   endDate: string | null;
+  sellerUsername: string | null;
+  /** Cantidad de ventas del vendedor (feedback score de eBay). */
+  sellerFeedbackScore: number | null;
+  /** % de feedback positivo del vendedor. */
+  sellerFeedbackPercentage: number | null;
 }
 
 export interface ListingDetail extends ListingSummary {
@@ -119,8 +124,13 @@ export interface EvaluatedDeal {
   batteryGrade: string | null;
   // true si es subasta: el precio guardado es el actual/mínimo, no el final.
   isAuction: boolean;
+  /** Acepta "Best Offer": el precio de lista es negociable. */
+  hasBestOffer: boolean;
   /** Cierre de la subasta (ISO), para poder priorizar las que están por terminar. */
   endDate: string | null;
+  sellerUsername: string | null;
+  sellerFeedbackScore: number | null;
+  sellerFeedbackPercentage: number | null;
   /** Título normalizado + precio: detecta republicaciones del mismo equipo. */
   fingerprint: string;
 }
@@ -187,6 +197,12 @@ export interface SearchConfig {
    * aplica a subastas, donde arrancar en $1 es normal.
    */
   minFixedPriceUsd: number;
+  /**
+   * Reputación mínima del vendedor. Un vendedor con pocas ventas o feedback
+   * bajo es riesgo de estafa o de equipo que no llega como se describió.
+   */
+  minSellerFeedbackScore: number;
+  minSellerFeedbackPercentage: number;
   // Excepción para reacondicionados con "Best Offer": el precio de lista puede
   // llegar hasta acá, porque la intención es negociar por debajo de maxPriceUsd
   // antes de comprar (ver rules/exclusion-rules.ts -> priceEligibilityRule).

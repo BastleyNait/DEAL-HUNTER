@@ -24,6 +24,29 @@ function patternRules(config: SearchConfig): ExclusionRule[] {
 }
 
 /**
+ * Reputación del vendedor. Se evalúa en el pre-descarte (los datos vienen en el
+ * resultado de búsqueda), así que filtra sin gastar llamadas de detalle.
+ * Si eBay no devuelve datos del vendedor no se descarta: falta de dato no es
+ * lo mismo que mala reputación.
+ */
+function sellerReputationRule(config: SearchConfig): ExclusionRule {
+  return {
+    id: "seller_below_threshold",
+    evaluate(listing: ListingDetail) {
+      const { sellerFeedbackScore: score, sellerFeedbackPercentage: pct } = listing;
+
+      if (score !== null && score < config.minSellerFeedbackScore) {
+        return { excluded: true, reason: `seller_only_${score}_sales` };
+      }
+      if (pct !== null && pct < config.minSellerFeedbackPercentage) {
+        return { excluded: true, reason: `seller_feedback_${pct}pct` };
+      }
+      return { excluded: false };
+    },
+  };
+}
+
+/**
  * Repuestos sueltos y equipos bloqueados. Buscar por número de modelo de CPU
  * trae muchos componentes (ventiladores, motherboards, pantallas) que, al ser
  * baratísimos, se colarían justo arriba de la lista como si fueran ofertazas.
@@ -117,6 +140,7 @@ function priceEligibilityRule(config: SearchConfig): ExclusionRule {
 export function createExclusionRules(config: SearchConfig): ExclusionRule[] {
   return [
     ...patternRules(config),
+    sellerReputationRule(config),
     partOrLockedRule(),
     implausiblePriceRule(config),
     missingStorageRule(),

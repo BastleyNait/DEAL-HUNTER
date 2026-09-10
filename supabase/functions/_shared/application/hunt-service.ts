@@ -240,7 +240,11 @@ export class HuntService {
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),
       isAuction: listing.buyingOptions.includes("AUCTION"),
+      hasBestOffer: listing.buyingOptions.includes("BEST_OFFER"),
       endDate: listing.endDate,
+      sellerUsername: listing.sellerUsername,
+      sellerFeedbackScore: listing.sellerFeedbackScore,
+      sellerFeedbackPercentage: listing.sellerFeedbackPercentage,
       fingerprint: listingFingerprint(listing.title, listing.price),
     };
   }

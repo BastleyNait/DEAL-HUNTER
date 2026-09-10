@@ -39,7 +39,11 @@ export class SupabaseDealRepository implements DealRepository {
       has_battery_info: deal.hasBatteryInfo,
       battery_grade: deal.batteryGrade,
       is_auction: deal.isAuction,
+      has_best_offer: deal.hasBestOffer,
       end_date: deal.endDate,
+      seller_username: deal.sellerUsername,
+      seller_feedback_score: deal.sellerFeedbackScore,
+      seller_feedback_percentage: deal.sellerFeedbackPercentage,
       fingerprint: deal.fingerprint,
       notified_at: deal.qualified ? new Date().toISOString() : null,
     });

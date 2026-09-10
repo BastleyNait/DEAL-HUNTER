@@ -23,6 +23,7 @@ interface EbayItemSummaryDto {
   buyingOptions?: string[];
   shortDescription?: string;
   itemEndDate?: string;
+  seller?: { username?: string; feedbackScore?: number; feedbackPercentage?: string };
 }
 
 interface EbayItemDetailDto extends EbayItemSummaryDto {
@@ -43,7 +44,17 @@ function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
     buyingOptions: dto.buyingOptions ?? [],
     shortDescription: stripHtml(dto.shortDescription ?? ""),
     endDate: dto.itemEndDate ?? null,
+    sellerUsername: dto.seller?.username ?? null,
+    sellerFeedbackScore: dto.seller?.feedbackScore ?? null,
+    // eBay lo manda como string ("99.8").
+    sellerFeedbackPercentage: parseNumber(dto.seller?.feedbackPercentage),
   };
+}
+
+function parseNumber(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 /** "Processor: Intel Core i5-1135G7" y demás item specifics, como texto plano. */

@@ -19,6 +19,8 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   deliveryCountry: "US",
   maxPriceUsd: 200,
   minFixedPriceUsd: 25,
+  minSellerFeedbackScore: 1000,
+  minSellerFeedbackPercentage: 95,
   // Reacondicionados (2000/2500) con "Best Offer" habilitado pueden listar hasta
   // acá: la idea es ofertar y bajar el precio final a <= maxPriceUsd antes de
   // comprar. Ver rules/exclusion-rules.ts -> priceEligibilityRule.
