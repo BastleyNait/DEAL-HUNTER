@@ -1,5 +1,10 @@
 import type { ExclusionRule, ListingDetail, SearchConfig } from "../domain/types.ts";
-import { extractBatteryPercent, extractStorageGb, mentionsNoStorage } from "../domain/hardware-signals.ts";
+import {
+  declaresDamage,
+  extractBatteryPercent,
+  extractStorageGb,
+  mentionsNoStorage,
+} from "../domain/hardware-signals.ts";
 
 /**
  * Una regla por cada `excludePatterns` del config (data-driven: agregar una
@@ -74,6 +79,17 @@ function implausiblePriceRule(config: SearchConfig): ExclusionRule {
   };
 }
 
+/** Daño estructural o funcional declarado por el vendedor, no negado. */
+function declaredDamageRule(): ExclusionRule {
+  return {
+    id: "declared_damage",
+    evaluate(listing: ListingDetail) {
+      const text = `${listing.title} ${listing.descriptionText}`;
+      return { excluded: declaresDamage(text), reason: "declared_damage" };
+    },
+  };
+}
+
 /**
  * Sin almacenamiento. Es regla de código y no un patrón de config porque cruza
  * dos señales: que el texto diga "no HD/HDD/SSD/disco" Y que además no aparezca
@@ -140,6 +156,7 @@ export function createExclusionRules(config: SearchConfig): ExclusionRule[] {
     ...patternRules(config),
     ...titlePatternRules(config),
     sellerReputationRule(config),
+    declaredDamageRule(),
     implausiblePriceRule(config),
     missingStorageRule(),
     batteryThresholdRule(config),

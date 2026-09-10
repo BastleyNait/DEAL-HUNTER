@@ -39,6 +39,33 @@ export function needsBatteryGradeReview(grade: string | null): boolean {
   return grade !== null && GRADES_TO_REVIEW.has(grade);
 }
 
+/**
+ * Daño declarado por el vendedor. Es regla de código y no un patrón de config
+ * porque necesita dos señales: que aparezca la frase Y que no venga negada.
+ * Sin eso se descartan máquinas sanas, porque las descripciones están llenas de
+ * frases como "✅ No Water Damage", "won't be any significant damage" o
+ * "does not cover cosmetic damage" (términos de garantía).
+ *
+ * "cosmetic damage" a secas queda afuera a propósito: rayones y marcas de uso
+ * son la línea base de una laptop corporativa usada y no frenan la reventa.
+ * Lo que descarta es daño estructural o funcional.
+ */
+const DAMAGE_PHRASE_RE =
+  /(?:have|has|with|showing)\s+damage|(?:severe|significant|major|structural|chassis|frame|physical|water|screen|display|lcd)\s+(?:\w+\s+){0,2}damage|breakage|split\s+hinge|display\s+(?:blemish|spot)|unable\s+to\s+close/gi;
+
+// Negación en la misma oración, hasta 25 caracteres antes de la frase.
+const NEGATION_BEFORE_RE =
+  /\b(?:no|not|never|without|won'?t|doesn'?t|don'?t|free\s+of|free\s+from|excluding|except)\b[^.!?]{0,25}$/i;
+
+export function declaresDamage(text: string): boolean {
+  DAMAGE_PHRASE_RE.lastIndex = 0;
+  for (const match of text.matchAll(DAMAGE_PHRASE_RE)) {
+    const before = text.slice(0, match.index);
+    if (!NEGATION_BEFORE_RE.test(before)) return true;
+  }
+  return false;
+}
+
 const MIN_DESCRIPTION_LENGTH = 20;
 
 /** true si el vendedor puso una descripción con contenido real (no vacía/boilerplate corta). */

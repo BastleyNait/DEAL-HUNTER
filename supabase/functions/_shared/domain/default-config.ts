@@ -189,14 +189,9 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       pattern: "batt(?:ery)?\\s*(health|condition)?\\s*[:\\-]?\\s*(fair|poor|bad)\\b",
       flags: "i",
     },
-    {
-      // Daño declarado sin ambigüedad. A diferencia de las muletillas tipo
-      // "may show signs of wear", estas son afirmaciones concretas del
-      // vendedor, así que sí valen contra la descripción.
-      reason: "declared_damage",
-      pattern: "\\bdamage\\s+such\\s+as\\b|\\b(?:have|has|with)\\s+damage\\b|\\bdisplay\\s+blemish",
-      flags: "i",
-    },
+    // "declared_damage" no vive acá: pasó a ser regla de código
+    // (rules/exclusion-rules.ts) porque necesita cruzar la frase de daño con
+    // que no venga negada ("No Water Damage", "won't be any damage").
   ],
   // Solo contra el título: el objetivo es revender rápido, así que cualquier
   // defecto declarado (pantalla, teclado, golpes) descarta el equipo.
