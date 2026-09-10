@@ -127,6 +127,8 @@ export interface EvaluatedDeal {
   rejectReason?: string;
   score: number | null;
   isGreatDeal: boolean;
+  /** CPU de las que pediste ver primero (config.priorityCpus). */
+  isPriority: boolean;
   // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
   // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
   // buena batería/specs y simplemente no lo puso en el texto.
@@ -244,6 +246,11 @@ export interface SearchConfig {
   maxNotificationsPerRun: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];
+  /**
+   * CPUs que van primero: encabezan el dashboard y se avisan por Telegram
+   * aunque no lleguen a "ofertaza". Son las etiquetas de cpuPatterns.
+   */
+  priorityCpus: string[];
   /** Frases que descartan, buscadas en título + descripción. */
   excludePatterns: ExcludePatternConfig[];
   /**

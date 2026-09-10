@@ -6,7 +6,12 @@ function escapeHtml(s: string): string {
 }
 
 function formatMessage(deal: EvaluatedDeal): string {
-  const header = deal.isGreatDeal ? "🚨 <b>OFERTAZA</b>" : "🔥 <b>Oferta encontrada</b>";
+  // Una subasta nunca se anuncia como ofertaza: el precio final es desconocido.
+  const header = deal.isGreatDeal
+    ? "🚨 <b>OFERTAZA</b>"
+    : deal.isPriority
+      ? "⭐ <b>CPU prioritaria</b>"
+      : "🔥 <b>Oferta encontrada</b>";
   const auctionTag = deal.isAuction ? " 🔨 Subasta" : "";
   const missing: string[] = [];
   if (!deal.hasDescription) missing.push("sin descripción");

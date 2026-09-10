@@ -171,7 +171,15 @@ export class HuntService {
           isGreatDeal = result.isGreatDeal;
         }
 
-        const evaluatedDeal = this.toEvaluatedDeal(candidate, detail, qualifies, reason, score, isGreatDeal);
+        const evaluatedDeal = this.toEvaluatedDeal(
+          candidate,
+          detail,
+          qualifies,
+          reason,
+          score,
+          isGreatDeal,
+          config.priorityCpus.includes(candidate.cpuLabel),
+        );
         await this.dealRepository.save(evaluatedDeal);
 
         if (qualifies) {
@@ -197,9 +205,17 @@ export class HuntService {
   private async notifyQualified(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
     if (deals.length === 0) return;
 
-    const worthPinging = config.notifyOnlyGreatDeals ? deals.filter((d) => d.isGreatDeal) : deals;
+    // Las CPUs prioritarias avisan siempre, aunque no lleguen a ofertaza — y
+    // eso incluye las subastas, que por definición ya no pueden ser ofertaza.
+    const worthPinging = config.notifyOnlyGreatDeals
+      ? deals.filter((d) => d.isGreatDeal || d.isPriority)
+      : deals;
+
     const individual = [...worthPinging]
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .sort((a, b) => {
+        if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
+        return (b.score ?? 0) - (a.score ?? 0);
+      })
       .slice(0, config.maxNotificationsPerRun);
     const individualIds = new Set(individual.map((d) => d.itemId));
 
@@ -230,6 +246,7 @@ export class HuntService {
     rejectReason: string | undefined,
     score: number | null,
     isGreatDeal: boolean,
+    isPriority = false,
   ) {
     const text = `${listing.title} ${listing.descriptionText}`;
     return {
@@ -245,6 +262,7 @@ export class HuntService {
       rejectReason,
       score,
       isGreatDeal,
+      isPriority,
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),

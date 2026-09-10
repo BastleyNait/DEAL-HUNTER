@@ -108,6 +108,9 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   notifyOnlyGreatDeals: true,
   maxNotificationsPerRun: 8,
   minBatteryPercent: 70,
+  // Las que más te interesan: encabezan el dashboard y se avisan por Telegram
+  // aunque no califiquen como ofertaza.
+  priorityCpus: ["Intel i5 12th gen", "Intel i7 11th gen"],
   // Cada patrón cubre dos formas de anunciar la CPU: (a) el modelo explícito
   // (i7-1165G7, i7-11800H, Ryzen 5 5500U...) con separador opcional (espacio,
   // guion, ®/™, o nada) y largo de dígitos variable (Intel usa 4 dígitos en

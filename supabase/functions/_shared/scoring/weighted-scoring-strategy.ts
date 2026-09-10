@@ -14,9 +14,16 @@ export function createWeightedScoringStrategy(
     score(listing: ListingDetail, ctx: ScoringContext): ScoringResult {
       const weighted = factors.reduce((sum, factor) => sum + factor.score(listing, ctx) * factor.weight, 0);
       const score = Math.round(weighted * 100);
+
+      // Una subasta nunca es "ofertaza": el precio que vemos es la puja actual,
+      // no lo que vas a terminar pagando, así que no hay forma de afirmar que
+      // sea una ganga. El puntaje se calcula igual para poder ordenarlas.
+      const isAuction = listing.buyingOptions.includes("AUCTION");
       const isGreatDeal =
-        (listing.price != null && listing.price <= config.greatDealMaxPrice) ||
-        score >= config.greatDealMinScore;
+        !isAuction &&
+        ((listing.price != null && listing.price <= config.greatDealMaxPrice) ||
+          score >= config.greatDealMinScore);
+
       return { score, isGreatDeal };
     },
   };

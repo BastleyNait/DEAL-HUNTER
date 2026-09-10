@@ -35,6 +35,7 @@ export class SupabaseDealRepository implements DealRepository {
       image_url: deal.imageUrl,
       score: deal.score,
       is_great_deal: deal.isGreatDeal,
+      is_priority: deal.isPriority,
       has_description: deal.hasDescription,
       has_battery_info: deal.hasBatteryInfo,
       battery_grade: deal.batteryGrade,
