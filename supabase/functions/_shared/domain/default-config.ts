@@ -18,18 +18,93 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // directamente, así que solo importa que el vendedor envíe dentro de EE.UU.
   deliveryCountry: "US",
   maxPriceUsd: 200,
+  minFixedPriceUsd: 25,
   // Reacondicionados (2000/2500) con "Best Offer" habilitado pueden listar hasta
   // acá: la idea es ofertar y bajar el precio final a <= maxPriceUsd antes de
   // comprar. Ver rules/exclusion-rules.ts -> priceEligibilityRule.
   refurbishedExceptionMaxPrice: 225,
-  refurbishedConditionIds: [2000, 2500],
+  refurbishedConditionIds: [2000, 2010, 2020, 2030, 2500],
   greatDealMaxPrice: 160,
   greatDealMinScore: 80,
-  // Excluye 7000 = "For parts or not working".
-  includedConditionIds: [1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000],
+  // Todos los condition IDs de eBay MENOS 7000 ("For parts or not working").
+  // Importante: 2010/2020/2030 (Excellent/Very Good/Good - Refurbished), 2750
+  // (Like New) y 1750 (New with defects) faltaban y eBay estaba filtrando esos
+  // listados del lado del servidor — justo el segmento de refurbished que nos
+  // interesa.
+  includedConditionIds: [1000, 1500, 1750, 2000, 2010, 2020, 2030, 2500, 2750, 3000, 4000, 5000, 6000],
   includeAuctions: true,
-  maxPages: 2,
-  maxCandidatesPerRun: 25,
+  /**
+   * Pool de vetas de búsqueda. Medido contra la API real: `q=laptop` rinde solo
+   * ~23 matches por cada 100 resultados, mientras que las queries por número de
+   * modelo rinden ~99/100 y tienen cientos de listados bajo el tope de precio
+   * (ej. "1145g7" -> ~949). Por eso el grueso del pool son modelos concretos,
+   * ordenados por precio (las más baratas de cada veta = las mejores ofertas),
+   * más algunas queries amplias por "recién publicado" para no perder lo nuevo.
+   */
+  searchProfiles: [
+    // --- Recién publicados (agarrar lo nuevo antes que el resto) ---
+    { query: "laptop", sort: "newlyListed", maxPages: 2 },
+    { query: "notebook i7", sort: "newlyListed", maxPages: 1 },
+    { query: "i7 11th gen", sort: "newlyListed", maxPages: 1 },
+    { query: "i5 11th gen", sort: "newlyListed", maxPages: 1 },
+    { query: "i5 12th gen", sort: "newlyListed", maxPages: 1 },
+    { query: "i7 10th gen", sort: "newlyListed", maxPages: 1 },
+    { query: "i7 12th gen", sort: "newlyListed", maxPages: 1 },
+    { query: "ryzen 5 laptop", sort: "newlyListed", maxPages: 1 },
+    { query: "ryzen 7 laptop", sort: "newlyListed", maxPages: 1 },
+
+    // --- Intel 11va gen (modelos concretos, ordenados por precio) ---
+    { query: "1135g7", sort: "price", maxPages: 1 },
+    { query: "1145g7", sort: "price", maxPages: 1 },
+    { query: "1155g7", sort: "price", maxPages: 1 },
+    { query: "1165g7", sort: "price", maxPages: 1 },
+    { query: "1185g7", sort: "price", maxPages: 1 },
+    { query: "11300h", sort: "price", maxPages: 1 },
+    { query: "11400h", sort: "price", maxPages: 1 },
+    { query: "11800h", sort: "price", maxPages: 1 },
+    { query: "11370h", sort: "price", maxPages: 1 },
+
+    // --- Intel 12va gen ---
+    { query: "1235u", sort: "price", maxPages: 1 },
+    { query: "1240p", sort: "price", maxPages: 1 },
+    { query: "1245u", sort: "price", maxPages: 1 },
+    { query: "12500h", sort: "price", maxPages: 1 },
+    { query: "1265u", sort: "price", maxPages: 1 },
+    { query: "12700h", sort: "price", maxPages: 1 },
+
+    // --- Intel 10ma gen ---
+    { query: "10510u", sort: "price", maxPages: 1 },
+    { query: "10610u", sort: "price", maxPages: 1 },
+    { query: "10710u", sort: "price", maxPages: 1 },
+    { query: "1065g7", sort: "price", maxPages: 1 },
+    { query: "10750h", sort: "price", maxPages: 1 },
+    { query: "10850h", sort: "price", maxPages: 1 },
+
+    // --- AMD ---
+    { query: "ryzen 5 5500u", sort: "price", maxPages: 1 },
+    { query: "ryzen 5 5625u", sort: "price", maxPages: 1 },
+    { query: "ryzen 5 5600h", sort: "price", maxPages: 1 },
+    { query: "ryzen 7 5700u", sort: "price", maxPages: 1 },
+    { query: "ryzen 7 5800h", sort: "price", maxPages: 1 },
+    { query: "ryzen 7 4700u", sort: "price", maxPages: 1 },
+    { query: "ryzen 7 4800h", sort: "price", maxPages: 1 },
+
+    // --- Líneas corporativas baratas (volumen alto, precisión media) ---
+    { query: "latitude i5", sort: "price", maxPages: 1 },
+    { query: "elitebook i5", sort: "price", maxPages: 1 },
+    { query: "thinkpad i7", sort: "price", maxPages: 1 },
+    { query: "probook ryzen", sort: "price", maxPages: 1 },
+
+    // --- Subastas por terminar (precio actual bajo) ---
+    { query: "laptop i7", sort: "endingSoonest", maxPages: 1 },
+    { query: "laptop i5", sort: "endingSoonest", maxPages: 1 },
+  ],
+  // 10 vetas por corrida: con el cron cada 15 min, el pool completo (~42) se
+  // recorre cada ~1 hora sin pasarse de la cuota diaria de la Browse API.
+  profilesPerRun: 10,
+  maxCandidatesPerRun: 30,
+  notifyOnlyGreatDeals: true,
+  maxNotificationsPerRun: 8,
   minBatteryPercent: 70,
   // Cada patrón cubre dos formas de anunciar la CPU: (a) el modelo explícito
   // (i7-1165G7, i7-11800H, Ryzen 5 5500U...) con separador opcional (espacio,
@@ -40,9 +115,25 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // "11th Gen i5", "Ryzen 5 5000 Series"). Ver hunt-deals/README para cómo
   // probar un patrón nuevo contra títulos reales antes de guardarlo acá.
   cpuPatterns: [
+    // i7 12va y Ryzen 7 5000 no estaban en el pedido original, pero son
+    // estrictamente mejores que las que sí están (i7 11va / R7 4000 / R5 5000)
+    // al mismo tope de precio. Si no las querés, se sacan del array en la fila
+    // de `search_config` sin redeployar.
+    {
+      label: "Intel i7 12th gen",
+      pattern: "\\bi7[\\s®™_-]*12\\d{2,3}[a-z0-9]{0,3}\\b|(?=.*\\bi7\\b)(?=.*\\b12[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)",
+      flags: "i",
+      tier: 8,
+    },
     {
       label: "Intel i7 11th gen",
       pattern: "\\bi7[\\s®™_-]*11\\d{2,3}[a-z0-9]{0,3}\\b|(?=.*\\bi7\\b)(?=.*\\b11[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)",
+      flags: "i",
+      tier: 7,
+    },
+    {
+      label: "AMD Ryzen 7 5000",
+      pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?5\\d{3}[a-z]{0,2}\\b",
       flags: "i",
       tier: 6,
     },
@@ -83,11 +174,9 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       pattern: "for\\s*parts|not\\s*working|parts\\s*only|parts[\\s\\/]*repair|no\\s*enciende|no\\s*prende|no\\s*power",
       flags: "i",
     },
-    {
-      reason: "missing_storage",
-      pattern: "no\\s*(hard\\s*drive|hdd|ssd|storage)|missing\\s*(hard\\s*drive|hdd|ssd|storage)|without\\s*(hard\\s*drive|hdd|ssd|storage)|sin\\s*disco(\\s*duro)?|sin\\s*almacenamiento",
-      flags: "i",
-    },
+    // "missing_storage" ya no vive acá: pasó a ser regla de código
+    // (rules/exclusion-rules.ts) porque necesita cruzar la frase con la
+    // ausencia de una capacidad concreta.
     {
       reason: "missing_battery",
       pattern: "no\\s*battery|missing\\s*battery|battery\\s*not\\s*included|without\\s*battery|sin\\s*bateria|sin\\s*batería",

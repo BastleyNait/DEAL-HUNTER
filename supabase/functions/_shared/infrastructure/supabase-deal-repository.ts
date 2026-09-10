@@ -11,6 +11,16 @@ export class SupabaseDealRepository implements DealRepository {
     return itemIds.filter((id) => !seen.has(id));
   }
 
+  async findKnownFingerprints(fingerprints: string[]): Promise<Set<string>> {
+    if (fingerprints.length === 0) return new Set();
+    const { data } = await this.supabase
+      .from("seen_listings")
+      .select("fingerprint")
+      .eq("qualified", true)
+      .in("fingerprint", fingerprints);
+    return new Set((data ?? []).map((r) => r.fingerprint as string));
+  }
+
   async save(deal: EvaluatedDeal): Promise<void> {
     await this.supabase.from("seen_listings").upsert({
       item_id: deal.itemId,
@@ -29,6 +39,7 @@ export class SupabaseDealRepository implements DealRepository {
       has_battery_info: deal.hasBatteryInfo,
       battery_grade: deal.batteryGrade,
       is_auction: deal.isAuction,
+      fingerprint: deal.fingerprint,
       notified_at: deal.qualified ? new Date().toISOString() : null,
     });
   }

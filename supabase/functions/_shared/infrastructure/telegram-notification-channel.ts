@@ -30,7 +30,15 @@ function formatMessage(deal: EvaluatedDeal): string {
 
 /** Canal de notificación por Telegram. Implementá otro NotificationChannel (push, WhatsApp) sin tocar esto. */
 export class TelegramNotificationChannel implements NotificationChannel {
-  async notify(deal: EvaluatedDeal): Promise<void> {
+  notify(deal: EvaluatedDeal): Promise<void> {
+    return this.send(formatMessage(deal), false);
+  }
+
+  notifySummary(text: string): Promise<void> {
+    return this.send(text, true);
+  }
+
+  private async send(text: string, disablePreview: boolean): Promise<void> {
     const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
     if (!token || !chatId) {
@@ -43,9 +51,9 @@ export class TelegramNotificationChannel implements NotificationChannel {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
-        text: formatMessage(deal),
+        text,
         parse_mode: "HTML",
-        disable_web_page_preview: false,
+        disable_web_page_preview: disablePreview,
       }),
     });
 

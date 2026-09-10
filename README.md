@@ -36,11 +36,13 @@ supabase/functions/_shared/
     types.ts           MarketplaceClient, ExclusionRule, ScoreFactor, DealRepository,
                         NotificationChannel, ConfigProvider, etc.
     default-config.ts  Config por defecto (fallback si falla la tabla search_config).
-    hardware-signals.ts Extractores de % batería / RAM / storage desde texto libre.
+    hardware-signals.ts Extractores de % batería / grado / RAM / storage, detección
+                        de repuestos y huella anti-duplicados, desde texto libre.
   cpu/
     cpu-matcher.ts     Matchea el título contra las CPUs buscadas.
   rules/
-    exclusion-rules.ts Reglas de descarte (for-parts, sin batería, batería baja...).
+    exclusion-rules.ts Reglas de descarte (for-parts, repuestos/BIOS locked, sin
+                        disco, batería baja, precio fuera de presupuesto...).
                         Agregar una regla nueva = agregar un objeto, no tocar las demás.
   scoring/
     factors.ts                   Un factor de puntaje por archivo-función (precio, CPU,
@@ -73,6 +75,41 @@ Qué te da esto en la práctica:
   `rules/` o `scoring/factors.ts`, sin tocar los existentes (Open/Closed).
 - **Cambiar el criterio de búsqueda sin redeployar**: editás la fila en la tabla
   `search_config` (ver más abajo).
+
+## Cómo encuentra ofertas (pool rotativo de búsquedas)
+
+Buscar solo `q=laptop` rendía poquísimo. Midiendo contra la Browse API real:
+
+| Query | Resultados ≤$225 | Aciertos en la página 1 |
+| --- | --- | --- |
+| `laptop` | 92.268 | 23/100 |
+| `1145g7` | 949 | 99/100 |
+| `1135g7` | 894 | 99/100 |
+| `1165g7` | 263 | 100/100 |
+| `i5 11th gen` | 249 | 100/100 |
+
+Por eso `config.searchProfiles` es un **pool de ~43 vetas** (queries por número de
+modelo de CPU ordenadas por precio, más queries amplias por "recién publicado" y
+subastas por terminar). Cada corrida usa una ventana rotativa de
+`profilesPerRun` vetas, elegida según el id de corrida, así se recorre el pool
+entero a lo largo del día sin pasarse de la cuota diaria de la API.
+
+Además:
+
+- `fieldgroups=EXTENDED` trae `shortDescription` en la búsqueda sin llamadas
+  extra: sirve para matchear CPU cuando el título no trae el modelo, y para
+  **pre-descartar** basura antes de gastar una llamada de detalle.
+- Los candidatos se ordenan por precio ascendente antes de gastar el presupuesto
+  de llamadas de detalle (`maxCandidatesPerRun`).
+- Se colapsan republicaciones del mismo equipo por huella (título normalizado +
+  precio): hay vendedores que suben la misma laptop 10 veces cambiando un solo
+  carácter del título.
+- Una veta o un ítem que falla (timeout, 5xx) se registra y se sigue: un error
+  puntual no tira abajo la corrida entera.
+
+Medido antes/después en la misma ventana horaria: de **41 candidatos y 16 útiles**
+por corrida a **~450 candidatos y ~350 útiles**, con ~1.100 únicos por ciclo
+completo del pool.
 
 ## 1. Requisitos
 
@@ -183,10 +220,24 @@ select cron.schedule(
 );
 ```
 
-Ajustá `*/15 * * * *` a la frecuencia que quieras (p. ej. `*/5 * * * *` cada 5 min).
-Tené en cuenta el límite diario de llamadas de la Browse API de eBay (por defecto
-5000/día) — con `maxPages: 2` cada corrida usa ~2 llamadas de búsqueda + hasta
-`maxCandidatesPerRun` llamadas de detalle, así que cada 15 min es un margen cómodo.
+**Sin este paso el bot solo caza cuando lo llamás a mano.** Se puede verificar si
+está corriendo solo mirando si hay filas en `hunt_runs` con intervalos regulares.
+
+Cuentas de cuota (la Browse API de eBay da 5.000 llamadas/día por defecto):
+cada corrida usa `profilesPerRun` llamadas de búsqueda (10) más, como mucho,
+`maxCandidatesPerRun` de detalle (30) — el pre-descarte hace que en la práctica
+sean bastantes menos. Con el cron cada 15 min (96 corridas/día) el techo teórico
+es ~3.800/día. Si ves errores de cuota, subí el intervalo a `*/20 * * * *` o
+bajá `maxCandidatesPerRun` en `search_config`.
+
+### Cuántos avisos te llegan
+
+Con el pool ampliado pueden aparecer decenas de ofertas por corrida, así que
+Telegram recibe una notificación individual solo por las **ofertazas** (hasta
+`maxNotificationsPerRun`, 8 por defecto, las de mejor puntaje primero) y un
+único mensaje de resumen por el resto. En el dashboard aparecen todas igual.
+Para que avise por todas: `update public.search_config set config = config ||
+'{"notifyOnlyGreatDeals": false}'::jsonb where id = 1;`
 
 Para desprogramarlo más adelante: `select cron.unschedule('hunt-deals-every-15-min');`
 

@@ -46,6 +46,47 @@ export function hasMeaningfulDescription(descriptionText: string): boolean {
   return descriptionText.trim().length >= MIN_DESCRIPTION_LENGTH;
 }
 
+// Cubre las formas reales en que los vendedores anuncian que no lleva disco:
+// "NO HD", "no hdd", "sin disco", "without ssd", "missing hard drive", etc.
+// Ojo: "no hd" no matchea dentro de "no hdmi" por el \b final, y "no dvd drive"
+// tampoco (exige que la palabra venga pegada al "no").
+const MISSING_STORAGE_PHRASE_RE =
+  /\b(?:no|without|missing|sin)\s*(?:hard\s*(?:drive|disk)|hdd|hd|ssd|nvme|m\.?2|storage|drive|disco(?:\s*duro)?|almacenamiento)\b/i;
+
+export function mentionsNoStorage(text: string): boolean {
+  return MISSING_STORAGE_PHRASE_RE.test(text);
+}
+
+/**
+ * Señales de que el listado NO es una laptop completa y usable: repuestos
+ * sueltos (que aparecen mucho al buscar por número de modelo de CPU) y equipos
+ * bloqueados. Se evalúa SOLO contra el título: en la descripción estas palabras
+ * son normales ("se le cambió el fan", "incluye cargador") y descartarían
+ * publicaciones legítimas.
+ */
+const PARTS_OR_LOCKED_TITLE_RE =
+  /\b(?:motherboard|mainboard|system\s*board|logic\s*board|palm\s*rest|palmrest|heat\s*sink|heatsink|fan|cooler|hinge|bezel|ribbon|(?:lcd|screen|display|keyboard|touchpad|battery|webcam|speaker)\s*(?:assembly|replacement|only)|bios\s*(?:is\s*)?(?:locked|password)|locked\s*to\s*bios)\b/i;
+
+export function looksLikePartOrLocked(title: string): boolean {
+  return PARTS_OR_LOCKED_TITLE_RE.test(title);
+}
+
+/**
+ * Huella para detectar republicaciones del mismo equipo: hay vendedores que
+ * suben la misma laptop 10 veces cambiando solo un carácter del título
+ * ("... NO HD", "... NO HD *", "... NO HD ~") para ocupar más lugar en la
+ * búsqueda. Normalizar a solo letras y números las colapsa a una sola.
+ */
+export function listingFingerprint(title: string, price: number | null): string {
+  const normalized = title
+    .toLowerCase()
+    // 13.3in / 13.3 inch / 13.3" son la misma medida escrita distinto, y es la
+    // variación más común entre republicaciones del mismo equipo.
+    .replace(/(\d)\s*(?:inches|inch|in)\b/g, "$1")
+    .replace(/[^a-z0-9]/g, "");
+  return `${normalized}|${Math.round(price ?? 0)}`;
+}
+
 const RAM_RE = /(\d{1,3})\s?gb\s*ram|ram\s*[:\-]?\s*(\d{1,3})\s?gb/i;
 
 /** Devuelve los GB de RAM mencionados, o 0 si no se detecta. */

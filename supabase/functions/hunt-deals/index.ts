@@ -36,12 +36,20 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const stats = await huntService.run();
+    // El id de corrida rota qué vetas de búsqueda se usan esta vez, así el pool
+    // completo se recorre a lo largo del día sin gastar cuota de más por corrida.
+    const stats = await huntService.run(Number(runId));
     await runTracker.finish(runId, stats);
     return Response.json({ ok: true, ...stats });
   } catch (err) {
     console.error(err);
-    await runTracker.finish(runId, { itemsScanned: 0, candidatesChecked: 0, itemsQualified: 0, error: String(err) });
+    await runTracker.finish(runId, {
+      itemsScanned: 0,
+      candidatesChecked: 0,
+      itemsQualified: 0,
+      duplicatesSkipped: 0,
+      error: String(err),
+    });
     return new Response(String(err), { status: 500 });
   }
 });

@@ -21,6 +21,7 @@ export class SupabaseRunTracker implements RunTracker {
         items_scanned: stats.itemsScanned,
         candidates_checked: stats.candidatesChecked,
         items_qualified: stats.itemsQualified,
+        duplicates_skipped: stats.duplicatesSkipped,
         error: stats.error ?? null,
       })
       .eq("id", runId);

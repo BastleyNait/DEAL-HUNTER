@@ -13,6 +13,9 @@ export interface ListingSummary {
   condition: string | null;
   conditionId: string | null;
   buyingOptions: string[];
+  // Viene gratis en la búsqueda con fieldgroups=EXTENDED. Sirve para matchear
+  // CPU y pre-descartar basura antes de gastar una llamada de detalle.
+  shortDescription: string;
 }
 
 export interface ListingDetail extends ListingSummary {
@@ -24,9 +27,26 @@ export interface SearchPage {
   pageSize: number;
 }
 
+/**
+ * Una "veta" de búsqueda: qué palabras clave usar y cómo ordenar. El pool vive
+ * en la config (DB) y cada corrida usa solo una ventana rotativa de él, así se
+ * cubren muchas más variantes sin reventar la cuota diaria de la API.
+ *
+ * - `sort: "price"` mina las más baratas de esa veta (las mejores ofertas).
+ * - `sort: "newlyListed"` agarra lo recién publicado antes que el resto.
+ * - `sort: "endingSoonest"` sirve para subastas por terminar.
+ */
+export interface SearchProfile {
+  query: string;
+  sort: "newlyListed" | "price" | "endingSoonest";
+  maxPages: number;
+  /** Override opcional; si no viene, usa config.categoryId. */
+  categoryId?: string | null;
+}
+
 /** Puerto: cualquier marketplace de segunda mano (eBay hoy, otro mañana). */
 export interface MarketplaceClient {
-  search(config: SearchConfig, page: SearchPage): Promise<ListingSummary[]>;
+  search(config: SearchConfig, profile: SearchProfile, page: SearchPage): Promise<ListingSummary[]>;
   getDetail(id: string): Promise<ListingDetail>;
 }
 
@@ -97,23 +117,31 @@ export interface EvaluatedDeal {
   batteryGrade: string | null;
   // true si es subasta: el precio guardado es el actual/mínimo, no el final.
   isAuction: boolean;
+  /** Título normalizado + precio: detecta republicaciones del mismo equipo. */
+  fingerprint: string;
 }
 
 /** Puerto: persistencia de ofertas ya evaluadas (hoy Supabase, mañana lo que sea). */
 export interface DealRepository {
   filterUnseen(itemIds: string[]): Promise<string[]>;
+  /** De las huellas dadas, cuáles ya existen como oferta calificada. */
+  findKnownFingerprints(fingerprints: string[]): Promise<Set<string>>;
   save(deal: EvaluatedDeal): Promise<void>;
 }
 
 /** Puerto: un canal de notificación (Telegram hoy; push/WhatsApp mañana). */
 export interface NotificationChannel {
   notify(deal: EvaluatedDeal): Promise<void>;
+  /** Resumen agregado cuando hay más ofertas que las que se avisan una por una. */
+  notifySummary(text: string): Promise<void>;
 }
 
 export interface RunStats {
   itemsScanned: number;
   candidatesChecked: number;
   itemsQualified: number;
+  /** Republicaciones del mismo equipo que se colapsaron en esta corrida. */
+  duplicatesSkipped: number;
   error?: string;
 }
 
@@ -146,6 +174,12 @@ export interface SearchConfig {
   categoryId: string;
   deliveryCountry: string;
   maxPriceUsd: number;
+  /**
+   * Piso de precio para publicaciones a precio fijo: por debajo de esto, con
+   * estas CPUs, no es un equipo completo sino un repuesto o una estafa. No
+   * aplica a subastas, donde arrancar en $1 es normal.
+   */
+  minFixedPriceUsd: number;
   // Excepción para reacondicionados con "Best Offer": el precio de lista puede
   // llegar hasta acá, porque la intención es negociar por debajo de maxPriceUsd
   // antes de comprar (ver rules/exclusion-rules.ts -> priceEligibilityRule).
@@ -155,8 +189,19 @@ export interface SearchConfig {
   greatDealMinScore: number;
   includedConditionIds: number[];
   includeAuctions: boolean;
-  maxPages: number;
+  /** Pool completo de vetas de búsqueda (editable en DB sin redeployar). */
+  searchProfiles: SearchProfile[];
+  /** Cuántas vetas del pool usa cada corrida (ventana rotativa por runId). */
+  profilesPerRun: number;
   maxCandidatesPerRun: number;
+  /**
+   * Política de aviso: con el pool ampliado aparecen decenas de ofertas por
+   * corrida, así que Telegram recibe una por una solo las ofertazas (hasta
+   * maxNotificationsPerRun) y el resto va en un único mensaje de resumen.
+   * Todo queda igual en el dashboard, se avise o no.
+   */
+  notifyOnlyGreatDeals: boolean;
+  maxNotificationsPerRun: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];
   excludePatterns: ExcludePatternConfig[];
