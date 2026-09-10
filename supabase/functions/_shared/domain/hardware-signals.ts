@@ -58,20 +58,6 @@ export function mentionsNoStorage(text: string): boolean {
 }
 
 /**
- * Señales de que el listado NO es una laptop completa y usable: repuestos
- * sueltos (que aparecen mucho al buscar por número de modelo de CPU) y equipos
- * bloqueados. Se evalúa SOLO contra el título: en la descripción estas palabras
- * son normales ("se le cambió el fan", "incluye cargador") y descartarían
- * publicaciones legítimas.
- */
-const PARTS_OR_LOCKED_TITLE_RE =
-  /\b(?:motherboard|mainboard|system\s*board|logic\s*board|palm\s*rest|palmrest|heat\s*sink|heatsink|fan|cooler|hinge|bezel|ribbon|(?:lcd|screen|display|keyboard|touchpad|battery|webcam|speaker)\s*(?:assembly|replacement|only)|bios\s*(?:is\s*)?(?:locked|password)|locked\s*to\s*bios)\b/i;
-
-export function looksLikePartOrLocked(title: string): boolean {
-  return PARTS_OR_LOCKED_TITLE_RE.test(title);
-}
-
-/**
  * Huella para detectar republicaciones del mismo equipo: hay vendedores que
  * suben la misma laptop 10 veces cambiando solo un carácter del título
  * ("... NO HD", "... NO HD *", "... NO HD ~") para ocupar más lugar en la

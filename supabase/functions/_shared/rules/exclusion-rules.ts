@@ -1,10 +1,5 @@
 import type { ExclusionRule, ListingDetail, SearchConfig } from "../domain/types.ts";
-import {
-  extractBatteryPercent,
-  extractStorageGb,
-  looksLikePartOrLocked,
-  mentionsNoStorage,
-} from "../domain/hardware-signals.ts";
+import { extractBatteryPercent, extractStorageGb, mentionsNoStorage } from "../domain/hardware-signals.ts";
 
 /**
  * Una regla por cada `excludePatterns` del config (data-driven: agregar una
@@ -47,18 +42,21 @@ function sellerReputationRule(config: SearchConfig): ExclusionRule {
 }
 
 /**
- * Repuestos sueltos y equipos bloqueados. Buscar por número de modelo de CPU
- * trae muchos componentes (ventiladores, motherboards, pantallas) que, al ser
- * baratísimos, se colarían justo arriba de la lista como si fueran ofertazas.
+ * Reglas que miran solo el título: repuestos sueltos, equipos bloqueados y
+ * defectos declarados (pantalla, teclado, golpes). Van contra el título y no
+ * contra la descripción a propósito — ver el comentario de titleExcludePatterns
+ * en domain/types.ts.
  */
-function partOrLockedRule(): ExclusionRule {
-  return {
-    id: "not_a_usable_laptop",
-    evaluate(listing: ListingDetail) {
-      if (!looksLikePartOrLocked(listing.title)) return { excluded: false };
-      return { excluded: true, reason: "not_a_usable_laptop" };
-    },
-  };
+function titlePatternRules(config: SearchConfig): ExclusionRule[] {
+  return config.titleExcludePatterns.map((p) => {
+    const regex = new RegExp(p.pattern, p.flags);
+    return {
+      id: p.reason,
+      evaluate(listing: ListingDetail) {
+        return { excluded: regex.test(listing.title), reason: p.reason };
+      },
+    };
+  });
 }
 
 /**
@@ -140,8 +138,8 @@ function priceEligibilityRule(config: SearchConfig): ExclusionRule {
 export function createExclusionRules(config: SearchConfig): ExclusionRule[] {
   return [
     ...patternRules(config),
+    ...titlePatternRules(config),
     sellerReputationRule(config),
-    partOrLockedRule(),
     implausiblePriceRule(config),
     missingStorageRule(),
     batteryThresholdRule(config),

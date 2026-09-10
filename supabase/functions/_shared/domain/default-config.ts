@@ -190,4 +190,39 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       flags: "i",
     },
   ],
+  // Solo contra el título: el objetivo es revender rápido, así que cualquier
+  // defecto declarado (pantalla, teclado, golpes) descarta el equipo.
+  titleExcludePatterns: [
+    {
+      reason: "part_or_component",
+      pattern:
+        "\\b(?:motherboard|mainboard|system\\s*board|logic\\s*board|palm\\s*rest|palmrest|heat\\s*sink|heatsink|fan|cooler|hinge|bezel|ribbon|(?:lcd|screen|display|keyboard|touchpad|battery|webcam|speaker)\\s*(?:assembly|replacement|only))\\b",
+      flags: "i",
+    },
+    {
+      reason: "bios_locked",
+      pattern: "\\bbios\\s*(?:is\\s*)?(?:locked|password)\\b|\\blocked\\s*to\\s*bios\\b",
+      flags: "i",
+    },
+    {
+      reason: "screen_defect",
+      pattern:
+        "\\b(?:hot\\s*spot|hotspot|pressure\\s*(?:mark|spot)|dead\\s*pixel|stuck\\s*pixel|backlight\\s*bleed|screen\\s*(?:damage|crack|scratch|issue|burn)|cracked\\s*screen|broken\\s*screen|discolor)",
+      flags: "i",
+    },
+    {
+      reason: "keyboard_defect",
+      pattern:
+        "\\b(?:keyboard|key|trackpad|touchpad)\\s*(?:issue|problem|damage|not\\s*working)\\b|\\bmissing\\s*keys?\\b|\\bkeys?\\s*missing\\b|\\bsticky\\s*keys\\b",
+      flags: "i",
+    },
+    {
+      // El lookbehind evita descartar por frases positivas del estilo
+      // "no cracks or dents", que son justamente lo que buscamos.
+      reason: "declared_defect",
+      pattern:
+        "\\bcosmetic\\s*(?:issue|damage|defect|flaw)|\\bas[-\\s]is\\b|\\bwater\\s*damage\\b|(?<!\\bno\\s)(?<!\\bnot\\s)(?<!\\bsin\\s)\\b(?:cracked|broken|damaged|dented|defective|faulty)\\b",
+      flags: "i",
+    },
+  ],
 };

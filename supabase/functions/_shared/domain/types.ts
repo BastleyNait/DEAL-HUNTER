@@ -227,7 +227,16 @@ export interface SearchConfig {
   maxNotificationsPerRun: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];
+  /** Frases que descartan, buscadas en título + descripción. */
   excludePatterns: ExcludePatternConfig[];
+  /**
+   * Frases que descartan pero SOLO en el título. Van aparte porque en la
+   * descripción son ruido: casi todo refurbisher incluye muletillas tipo
+   * "may show signs of wear" o "may have minor scratches", y aplicarlas ahí
+   * descartaría publicaciones perfectamente sanas. Cuando el vendedor tiene un
+   * defecto real que declarar, lo pone en el título.
+   */
+  titleExcludePatterns: ExcludePatternConfig[];
 }
 
 /** Puerto: de dónde sale el SearchConfig activo (DB hoy, podría ser por-usuario mañana). */
