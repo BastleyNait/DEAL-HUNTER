@@ -100,13 +100,27 @@ export function listingFingerprint(title: string, price: number | null): string 
   return `${normalized}|${Math.round(price ?? 0)}`;
 }
 
-const RAM_RE = /(\d{1,3})\s?gb\s*ram|ram\s*[:\-]?\s*(\d{1,3})\s?gb/i;
+const RAM_EXPLICIT_RE = /(\d{1,3})\s?gb\s*(?:ram|ddr\d?|memory|memoria)|(?:ram|memory|memoria)\s*[:\-]?\s*(\d{1,3})\s?gb/i;
+// Sin la palabra "RAM": muchos títulos ponen "16GB 512GB SSD" o "16GB/256GB".
+// Se distingue por tamaño, que en laptops no se solapa: la RAM llega hasta 64GB
+// y el almacenamiento arranca en 128GB.
+const RAM_BARE_RE = /\b(4|6|8|12|16|20|24|32|36|40|48|64)\s?gb\b/i;
 
 /** Devuelve los GB de RAM mencionados, o 0 si no se detecta. */
 export function extractRamGb(text: string): number {
-  const m = text.match(RAM_RE);
-  const gb = m ? Number(m[1] ?? m[2]) : 0;
-  return Number.isNaN(gb) ? 0 : gb;
+  const explicit = text.match(RAM_EXPLICIT_RE);
+  if (explicit) {
+    const gb = Number(explicit[1] ?? explicit[2]);
+    if (!Number.isNaN(gb)) return gb;
+  }
+
+  const bare = text.match(RAM_BARE_RE);
+  if (bare) {
+    const gb = Number(bare[1]);
+    if (!Number.isNaN(gb)) return gb;
+  }
+
+  return 0;
 }
 
 const STORAGE_TB_RE = /\b(\d)\s?tb\b/i;

@@ -97,6 +97,18 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     { query: "thinkpad i7", sort: "price", maxPages: 1 },
     { query: "probook ryzen", sort: "price", maxPages: 1 },
 
+    // --- Lo que realmente se compró: ThinkPad L-series y Dynabook Portégé,
+    //     más la serie Ryzen 7000 que antes no se buscaba ---
+    { query: "thinkpad l14", sort: "price", maxPages: 1 },
+    { query: "thinkpad l15", sort: "price", maxPages: 1 },
+    { query: "thinkpad l13", sort: "price", maxPages: 1 },
+    { query: "thinkpad t14", sort: "price", maxPages: 1 },
+    { query: "dynabook portege", sort: "price", maxPages: 1 },
+    { query: "portege x30", sort: "price", maxPages: 1 },
+    { query: "7530u", sort: "price", maxPages: 1 },
+    { query: "7730u", sort: "price", maxPages: 1 },
+    { query: "1245u", sort: "newlyListed", maxPages: 1 },
+
     // --- Subastas por terminar (precio actual bajo) ---
     { query: "laptop i7", sort: "endingSoonest", maxPages: 1 },
     { query: "laptop i5", sort: "endingSoonest", maxPages: 1 },
@@ -111,6 +123,20 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // Las que más te interesan: encabezan el dashboard y se avisan por Telegram
   // aunque no califiquen como ofertaza.
   priorityCpus: ["Intel i5 12th gen", "Intel i7 11th gen"],
+  // Sacado de las compras reales: 4 ThinkPad y 2 Dynabook Portégé. Corporativas
+  // delgadas, que se revenden rápido y tienen repuestos.
+  preferredModels: [
+    "thinkpad",
+    "portege",
+    "port[ée]g[ée]",
+    "dynabook",
+    "latitude",
+    "elitebook",
+    "probook",
+    "zbook",
+    "precision",
+    "surface\\s+laptop",
+  ],
   // Cada patrón cubre dos formas de anunciar la CPU: (a) el modelo explícito
   // (i7-1165G7, i7-11800H, Ryzen 5 5500U...) con separador opcional (espacio,
   // guion, ®/™, o nada) y largo de dígitos variable (Intel usa 4 dígitos en
@@ -137,14 +163,29 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       tier: 7,
     },
     {
-      label: "AMD Ryzen 7 5000",
-      pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?5\\d{3}[a-z]{0,2}\\b",
+      // Mismo tier que la i7 11va: es la CPU de 3 de las 6 compras reales.
+      label: "Intel i5 12th gen",
+      pattern: "\\bi5[\\s®™_-]*12\\d{2,3}[a-z0-9]{0,3}\\b|(?=.*\\bi5\\b)(?=.*\\b12[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)",
+      flags: "i",
+      tier: 7,
+    },
+    {
+      // Serie 7000: faltaba por completo, y una de las compras reales fue un
+      // Ryzen 5 7530U que el sistema ni siquiera reconocía.
+      label: "AMD Ryzen 7 7000",
+      pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?7\\d{3}[a-z]{0,2}\\b",
+      flags: "i",
+      tier: 7,
+    },
+    {
+      label: "AMD Ryzen 5 7000",
+      pattern: "\\b(?:ryzen[\\s®™_-]*5|r5)[\\s-]?7\\d{3}[a-z]{0,2}\\b",
       flags: "i",
       tier: 6,
     },
     {
-      label: "Intel i5 12th gen",
-      pattern: "\\bi5[\\s®™_-]*12\\d{2,3}[a-z0-9]{0,3}\\b|(?=.*\\bi5\\b)(?=.*\\b12[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)",
+      label: "AMD Ryzen 7 5000",
+      pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?5\\d{3}[a-z]{0,2}\\b",
       flags: "i",
       tier: 5,
     },
@@ -155,16 +196,16 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       tier: 4,
     },
     {
+      label: "Intel i5 11th gen",
+      pattern: "\\bi5[\\s®™_-]*11\\d{2,3}[a-z0-9]{0,3}\\b|(?=.*\\bi5\\b)(?=.*\\b11[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)",
+      flags: "i",
+      tier: 4,
+    },
+    {
       label: "AMD Ryzen 7 4000",
       pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?4\\d{3}[a-z]{0,2}\\b|(?=.*\\bryzen\\b)(?=.*\\b4000\\b)",
       flags: "i",
       tier: 3,
-    },
-    {
-      label: "Intel i5 11th gen",
-      pattern: "\\bi5[\\s®™_-]*11\\d{2,3}[a-z0-9]{0,3}\\b|(?=.*\\bi5\\b)(?=.*\\b11[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)",
-      flags: "i",
-      tier: 2,
     },
     {
       label: "AMD Ryzen 5 5000",

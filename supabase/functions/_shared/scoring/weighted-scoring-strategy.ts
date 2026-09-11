@@ -1,5 +1,5 @@
 import type { ListingDetail, ScoreFactor, ScoringContext, ScoringResult, ScoringStrategy, SearchConfig } from "../domain/types.ts";
-import { DEFAULT_SCORE_FACTORS } from "./factors.ts";
+import { createModelFactor, DEFAULT_SCORE_FACTORS } from "./factors.ts";
 
 /**
  * Combina una lista de ScoreFactor pluggeable en un puntaje 0-100. Agregar un
@@ -8,7 +8,7 @@ import { DEFAULT_SCORE_FACTORS } from "./factors.ts";
  */
 export function createWeightedScoringStrategy(
   config: SearchConfig,
-  factors: ScoreFactor[] = DEFAULT_SCORE_FACTORS,
+  factors: ScoreFactor[] = [...DEFAULT_SCORE_FACTORS, createModelFactor(config.preferredModels)],
 ): ScoringStrategy {
   return {
     score(listing: ListingDetail, ctx: ScoringContext): ScoringResult {

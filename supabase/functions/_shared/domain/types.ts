@@ -251,6 +251,11 @@ export interface SearchConfig {
    * aunque no lleguen a "ofertaza". Son las etiquetas de cpuPatterns.
    */
   priorityCpus: string[];
+  /**
+   * Líneas corporativas que se revenden rápido (thinkpad, portege, latitude...).
+   * Suman al puntaje; no son excluyentes.
+   */
+  preferredModels: string[];
   /** Frases que descartan, buscadas en título + descripción. */
   excludePatterns: ExcludePatternConfig[];
   /**
