@@ -121,6 +121,7 @@ export class HuntService {
           ...candidate.summary,
           descriptionText: candidate.summary.shortDescription,
           sellerDescription: "",
+          sellerDescriptionHtml: "",
           aspects: [],
           additionalImages: [],
         };
@@ -144,6 +145,7 @@ export class HuntService {
           ...candidate.summary,
           descriptionText: candidate.summary.shortDescription,
           sellerDescription: "",
+          sellerDescriptionHtml: "",
           aspects: [],
           additionalImages: [],
         };
@@ -270,6 +272,7 @@ export class HuntService {
       hasBestOffer: listing.buyingOptions.includes("BEST_OFFER"),
       endDate: listing.endDate,
       sellerDescription: listing.sellerDescription,
+      sellerDescriptionHtml: listing.sellerDescriptionHtml,
       aspects: listing.aspects,
       additionalImages: listing.additionalImages,
       sellerUsername: listing.sellerUsername,

@@ -43,6 +43,7 @@ export class SupabaseDealRepository implements DealRepository {
       has_best_offer: deal.hasBestOffer,
       end_date: deal.endDate,
       seller_description: deal.sellerDescription,
+      seller_description_html: deal.sellerDescriptionHtml,
       aspects: deal.aspects,
       additional_images: deal.additionalImages,
       seller_username: deal.sellerUsername,

@@ -35,6 +35,23 @@ interface EbayItemDetailDto extends EbayItemSummaryDto {
 // Las descripciones de eBay suelen ser plantillas gigantes; con esto alcanza de
 // sobra para leer lo que el vendedor realmente dice del equipo.
 const MAX_DESCRIPTION_CHARS = 4000;
+const MAX_DESCRIPTION_HTML_CHARS = 20000;
+
+/**
+ * Primera capa de saneamiento, del lado del servidor: saca los bloques que
+ * ejecutan o cargan cosas, los manejadores de eventos y las URLs javascript:.
+ * No es la única defensa — el dashboard vuelve a sanear con DOMPurify antes de
+ * renderizar — pero evita que markup hostil llegue siquiera a la base.
+ */
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<(script|style|iframe|object|embed|svg|link|meta|form|base)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<(script|style|iframe|object|embed|svg|link|meta|form|base)\b[^>]*\/?>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src|action)\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s>]*)/gi, "")
+    .slice(0, MAX_DESCRIPTION_HTML_CHARS);
+}
 
 function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
   return {
@@ -153,6 +170,7 @@ export class EbayMarketplaceClient implements MarketplaceClient {
       ...summary,
       descriptionText,
       sellerDescription,
+      sellerDescriptionHtml: sanitizeHtml(dto.description ?? ""),
       aspects,
       additionalImages: (dto.additionalImages ?? [])
         .map((img) => img.imageUrl)

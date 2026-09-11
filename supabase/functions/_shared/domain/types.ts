@@ -34,8 +34,10 @@ export interface ListingDetail extends ListingSummary {
   /** Descripción + shortDescription + item specifics, todo junto: es lo que
    *  evalúan las reglas y el scoring. */
   descriptionText: string;
-  /** Solo la descripción del vendedor, para mostrarla tal cual en el dashboard. */
+  /** Descripción del vendedor en texto plano, para las reglas y las banderas. */
   sellerDescription: string;
+  /** La misma descripción con su formato, ya saneada, para mostrarla. */
+  sellerDescriptionHtml: string;
   /** Item specifics (Processor, RAM, Screen Size...) como pares nombre/valor. */
   aspects: ListingAspect[];
   /** Resto de las fotos de la publicación, además de imageUrl. */
@@ -150,6 +152,7 @@ export interface EvaluatedDeal {
   fingerprint: string;
   // Para la vista de detalle del dashboard.
   sellerDescription: string;
+  sellerDescriptionHtml: string;
   aspects: ListingAspect[];
   additionalImages: string[];
 }
