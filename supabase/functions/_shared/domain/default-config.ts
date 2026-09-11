@@ -123,20 +123,29 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // Las que más te interesan: encabezan el dashboard y se avisan por Telegram
   // aunque no califiquen como ofertaza.
   priorityCpus: ["Intel i5 12th gen", "Intel i7 11th gen"],
-  // Sacado de las compras reales: 4 ThinkPad y 2 Dynabook Portégé. Corporativas
-  // delgadas, que se revenden rápido y tienen repuestos.
-  preferredModels: [
-    "thinkpad",
-    "portege",
-    "port[ée]g[ée]",
-    "dynabook",
-    "latitude",
-    "elitebook",
-    "probook",
-    "zbook",
-    "precision",
-    "surface\\s+laptop",
+  /**
+   * Escalafón de reventa. Gana el primer patrón que matchea el título, así que
+   * el orden importa: van de mejor a peor.
+   *
+   * El criterio combina las compras reales (4 ThinkPad, 2 Dynabook Portégé) con
+   * lo que se sostiene del mercado de segunda mano: las ThinkPad T/X tienen
+   * chasis de magnesio o fibra de vidrio y son de las más duraderas, con
+   * repuestos fáciles; las EliteBook son de las corporativas que mejor
+   * envejecen; las Latitude son confiables pero no tienen ventaja de
+   * durabilidad, y en la práctica llegan con la tapa muy rayada, que es lo que
+   * frena la reventa. Las líneas de consumo (Inspiron, Pavilion, IdeaPad,
+   * Aspire) caen al valor de respaldo.
+   */
+  modelTiers: [
+    { label: "ThinkPad T / X / P", pattern: "thinkpad\\s*[txp]\\d|thinkpad\\s*x1", flags: "i", weight: 1 },
+    { label: "ThinkPad (cualquier línea)", pattern: "thinkpad|think\\s*pad", flags: "i", weight: 0.95 },
+    { label: "HP EliteBook / ZBook", pattern: "elitebook|zbook", flags: "i", weight: 0.85 },
+    { label: "Dynabook Portégé / Tecra", pattern: "port[ée]g[ée]|portege|dynabook|tecra", flags: "i", weight: 0.8 },
+    { label: "HP ProBook", pattern: "probook", flags: "i", weight: 0.68 },
+    { label: "Dell Precision / Surface Laptop", pattern: "precision|surface\\s*laptop", flags: "i", weight: 0.55 },
+    { label: "Dell Latitude", pattern: "latitude", flags: "i", weight: 0.5 },
   ],
+  modelFallbackWeight: 0.25,
   // Cada patrón cubre dos formas de anunciar la CPU: (a) el modelo explícito
   // (i7-1165G7, i7-11800H, Ryzen 5 5500U...) con separador opcional (espacio,
   // guion, ®/™, o nada) y largo de dígitos variable (Intel usa 4 dígitos en

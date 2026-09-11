@@ -8,7 +8,10 @@ import { createModelFactor, DEFAULT_SCORE_FACTORS } from "./factors.ts";
  */
 export function createWeightedScoringStrategy(
   config: SearchConfig,
-  factors: ScoreFactor[] = [...DEFAULT_SCORE_FACTORS, createModelFactor(config.preferredModels)],
+  factors: ScoreFactor[] = [
+    ...DEFAULT_SCORE_FACTORS,
+    createModelFactor(config.modelTiers, config.modelFallbackWeight),
+  ],
 ): ScoringStrategy {
   return {
     score(listing: ListingDetail, ctx: ScoringContext): ScoringResult {

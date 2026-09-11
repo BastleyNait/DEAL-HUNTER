@@ -203,6 +203,15 @@ export interface ExcludePatternConfig {
   flags: string;
 }
 
+export interface ModelTierConfig {
+  /** Para leer la config; no se usa en el matching. */
+  label: string;
+  pattern: string;
+  flags: string;
+  /** 0..1 — cuánto aporta al factor de modelo. */
+  weight: number;
+}
+
 /**
  * Todo lo que define "qué es una oferta interesante". Tiene un valor por defecto
  * (default-config.ts) pero se puede sobreescribir por fila en la tabla `search_config`
@@ -255,10 +264,13 @@ export interface SearchConfig {
    */
   priorityCpus: string[];
   /**
-   * Líneas corporativas que se revenden rápido (thinkpad, portege, latitude...).
-   * Suman al puntaje; no son excluyentes.
+   * Escalafón de modelos por facilidad de reventa. Gana el primero que matchea
+   * el título, así que van de mejor a peor. No excluyen nada: pesan en el
+   * puntaje. `modelFallbackWeight` es lo que recibe un título que no matchea
+   * ninguno (líneas de consumo).
    */
-  preferredModels: string[];
+  modelTiers: ModelTierConfig[];
+  modelFallbackWeight: number;
   /** Frases que descartan, buscadas en título + descripción. */
   excludePatterns: ExcludePatternConfig[];
   /**
