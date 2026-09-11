@@ -15,6 +15,7 @@ import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
 import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
+  extractRamGb,
   hasMeaningfulDescription,
   listingFingerprint,
   mentionsBattery,
@@ -39,6 +40,29 @@ export function selectProfiles(config: SearchConfig, rotationSeed: number): Sear
   const count = Math.min(config.profilesPerRun, pool.length);
   const start = ((rotationSeed % pool.length) + pool.length) % pool.length;
   return Array.from({ length: count }, (_, i) => pool[(start + i) % pool.length]);
+}
+
+/**
+ * Estimación barata de cuánto promete un candidato, con lo único que se sabe
+ * antes de gastar una llamada de detalle: el título y el precio del listado.
+ * Es un reflejo del scoring real (CPU prioritaria, 16GB, línea que se revende
+ * bien, y el precio como desempate), no un criterio aparte.
+ */
+function promiseOf(candidate: Candidate, config: SearchConfig): number {
+  const title = candidate.summary.title;
+  let promise = candidate.cpuTier * 10;
+
+  if (config.priorityCpus.includes(candidate.cpuLabel)) promise += 40;
+  if (extractRamGb(title) >= 16) promise += 35;
+
+  const modelTier = config.modelTiers.find((tier) => new RegExp(tier.pattern, tier.flags).test(title));
+  promise += (modelTier ? modelTier.weight : config.modelFallbackWeight) * 30;
+
+  // Desempate: entre dos candidatos parecidos, el más barato deja más margen.
+  const price = candidate.summary.price;
+  if (price != null) promise += Math.max(0, (config.maxPriceUsd - price) / config.maxPriceUsd) * 10;
+
+  return promise;
 }
 
 /**
@@ -101,9 +125,13 @@ export class HuntService {
     const unseenIds = await this.dealRepository.filterUnseen([...candidates.keys()]);
     const unseen = unseenIds
       .map((id) => candidates.get(id)!)
-      // Si hay más candidatos que presupuesto de llamadas, primero los más
-      // baratos: son los que más chance tienen de ser oferta.
-      .sort((a, b) => (a.summary.price ?? Infinity) - (b.summary.price ?? Infinity));
+      // Cuando hay más candidatos que presupuesto de llamadas de detalle, se
+      // gastan en los más prometedores según lo que ya se sabe del título.
+      // Antes se ordenaba por precio ascendente, que era coherente con el
+      // scoring viejo ("más barato = mejor") pero contradice el actual: dejaba
+      // el presupuesto en la punta barata y nunca llegaba a las máquinas que
+      // realmente se compran.
+      .sort((a, b) => promiseOf(b, config) - promiseOf(a, config));
 
     // 3. Colapsar republicaciones del mismo equipo (mismo título normalizado y
     //    precio), tanto dentro de esta corrida como contra lo ya guardado.
