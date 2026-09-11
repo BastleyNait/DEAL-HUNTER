@@ -66,6 +66,15 @@ function promiseOf(candidate: Candidate, config: SearchConfig): number {
 }
 
 /**
+ * Orden en que vale la pena interrumpir: primero las CPUs prioritarias, y
+ * dentro de cada grupo por puntaje.
+ */
+function betterFirst(a: EvaluatedDeal, b: EvaluatedDeal): number {
+  if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
+  return (b.score ?? 0) - (a.score ?? 0);
+}
+
+/**
  * Orquesta una corrida completa: buscar en varias vetas -> matchear CPU ->
  * filtrar ya vistos -> pre-descartar con lo que ya tenemos -> traer detalle ->
  * aplicar reglas -> puntuar -> guardar -> notificar.
@@ -135,9 +144,17 @@ export class HuntService {
 
     // 3. Colapsar republicaciones del mismo equipo (mismo título normalizado y
     //    precio), tanto dentro de esta corrida como contra lo ya guardado.
-    const knownFingerprints = await this.dealRepository.findKnownFingerprints(
-      unseen.map((c) => listingFingerprint(c.summary.title, c.summary.price)),
-    );
+    //    Si la consulta falla se sigue sin ella: perder la corrida entera es
+    //    peor que evaluar de más, y los avisos repetidos los corta después
+    //    selectNotifiable().
+    let knownFingerprints = new Set<string>();
+    try {
+      knownFingerprints = await this.dealRepository.findKnownFingerprints(
+        unseen.map((c) => listingFingerprint(c.summary.title, c.summary.price)),
+      );
+    } catch (err) {
+      console.error("Falló la consulta de huellas conocidas:", err);
+    }
     const seenThisRun = new Set<string>();
     const fresh: Candidate[] = [];
     for (const candidate of unseen) {
@@ -153,9 +170,15 @@ export class HuntService {
           aspects: [],
           additionalImages: [],
         };
-        await this.dealRepository.save(
-          this.toEvaluatedDeal(candidate, asListing, false, "duplicate_listing", null, false),
-        );
+        try {
+          await this.dealRepository.save(
+            this.toEvaluatedDeal(candidate, asListing, false, "duplicate_listing", null, false),
+          );
+        } catch (err) {
+          // Un guardado que falla no puede tumbar la corrida, pero sí tiene que
+          // verse en los logs: si falla siempre, ese ítem vuelve cada vez.
+          console.error(`No se pudo guardar el duplicado ${candidate.summary.id}:`, err);
+        }
         continue;
       }
       seenThisRun.add(fingerprint);
@@ -230,6 +253,41 @@ export class HuntService {
   }
 
   /**
+   * Saca de la lista lo que ya se avisó o lo que ya marcaste como visto en el
+   * dashboard, mirando la máquina y no la publicación.
+   *
+   * Hace falta porque un vendedor que republica el mismo equipo genera un
+   * item_id nuevo y, si además le cambia el precio, tampoco coincide la huella
+   * de duplicados (que incluye el precio). Con eso solo, la misma ThinkPad
+   * podía sonar en el teléfono tres veces.
+   *
+   * De paso colapsa los repetidos dentro de una misma corrida: si dos vetas
+   * traen el mismo equipo, se avisa el mejor de los dos y nada más.
+   */
+  private async selectNotifiable(deals: EvaluatedDeal[]): Promise<EvaluatedDeal[]> {
+    if (deals.length === 0) return [];
+
+    let keys: Map<string, string>;
+    try {
+      keys = await this.dealRepository.findNotifiableKeys(deals.map((d) => d.itemId));
+    } catch (err) {
+      // Si el filtro falla se avisa igual: perderse una oferta es peor que
+      // recibirla repetida.
+      console.error("Falló el filtro de avisos ya vistos:", err);
+      return deals;
+    }
+
+    const best = new Map<string, EvaluatedDeal>();
+    for (const deal of deals) {
+      const key = keys.get(deal.itemId);
+      if (key === undefined) continue;
+      const current = best.get(key);
+      if (!current || betterFirst(deal, current) < 0) best.set(key, deal);
+    }
+    return [...best.values()];
+  }
+
+  /**
    * Avisa las subastas que recién ahora entran en su último tramo y dejan
    * margen para pujar. Va contra lo guardado, no contra lo encontrado en esta
    * corrida: una subasta descubierta con días de anticipación nunca se
@@ -248,23 +306,30 @@ export class HuntService {
       return;
     }
 
-    const alerted: string[] = [];
-    for (const deal of closing) {
+    const notifiable = await this.selectNotifiable(closing);
+    const notifiableIds = new Set(notifiable.map((d) => d.itemId));
+
+    const sent: string[] = [];
+    for (const deal of notifiable) {
       try {
         await this.notificationChannel.notify(deal);
-        alerted.push(deal.itemId);
+        sent.push(deal.itemId);
       } catch (err) {
         console.error(`Falló el aviso de subasta ${deal.itemId}:`, err);
       }
     }
 
-    // Se marcan solo las que efectivamente se avisaron, así una que falló se
-    // reintenta en la próxima corrida en vez de perderse.
+    // Las silenciadas también se marcan como avisadas: de esa máquina ya se
+    // avisó, así que volver a traerlas en cada corrida es trabajo perdido.
+    // Las que fallaron al enviarse no entran, y se reintentan la próxima vez.
+    const silenced = closing.filter((d) => !notifiableIds.has(d.itemId)).map((d) => d.itemId);
     try {
-      await this.dealRepository.markAuctionsAlerted(alerted);
+      await this.dealRepository.markAuctionsAlerted([...silenced, ...sent]);
     } catch (err) {
       console.error("Falló el marcado de subastas avisadas:", err);
     }
+
+    await this.markNotified(sent);
   }
 
   /**
@@ -276,36 +341,51 @@ export class HuntService {
   private async notifyQualified(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
     if (deals.length === 0) return;
 
+    // El filtro va primero: no tiene sentido gastar el cupo de avisos de la
+    // corrida en equipos que ya viste.
+    const notifiable = await this.selectNotifiable(deals);
+    if (notifiable.length === 0) return;
+
     // Las CPUs prioritarias avisan siempre, aunque no lleguen a ofertaza.
     const worthPinging = config.notifyOnlyGreatDeals
-      ? deals.filter((d) => d.isGreatDeal || d.isPriority)
-      : deals;
+      ? notifiable.filter((d) => d.isGreatDeal || d.isPriority)
+      : notifiable;
 
-    const individual = [...worthPinging]
-      .sort((a, b) => {
-        if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
-        return (b.score ?? 0) - (a.score ?? 0);
-      })
-      .slice(0, config.maxNotificationsPerRun);
+    const individual = [...worthPinging].sort(betterFirst).slice(0, config.maxNotificationsPerRun);
     const individualIds = new Set(individual.map((d) => d.itemId));
 
+    const sent: string[] = [];
     for (const deal of individual) {
       try {
         await this.notificationChannel.notify(deal);
+        sent.push(deal.itemId);
       } catch (err) {
         console.error(`Falló la notificación de ${deal.itemId}:`, err);
       }
     }
 
-    const rest = deals.filter((d) => !individualIds.has(d.itemId));
-    if (rest.length === 0) return;
+    const rest = notifiable.filter((d) => !individualIds.has(d.itemId));
+    if (rest.length > 0) {
+      try {
+        await this.notificationChannel.notifyDigest(
+          [...rest].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity)),
+        );
+        // El resumen también cuenta como aviso: si aparece ahí, ya lo viste.
+        sent.push(...rest.map((d) => d.itemId));
+      } catch (err) {
+        console.error("Falló la notificación de resumen:", err);
+      }
+    }
 
+    await this.markNotified(sent);
+  }
+
+  /** Marcar lo enviado nunca puede tumbar una corrida que ya avisó bien. */
+  private async markNotified(itemIds: string[]): Promise<void> {
     try {
-      await this.notificationChannel.notifyDigest(
-        [...rest].sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity)),
-      );
+      await this.dealRepository.markNotified(itemIds);
     } catch (err) {
-      console.error("Falló la notificación de resumen:", err);
+      console.error("Falló el marcado de avisos enviados:", err);
     }
   }
 

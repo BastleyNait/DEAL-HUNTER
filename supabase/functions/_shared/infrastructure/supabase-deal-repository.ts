@@ -1,24 +1,55 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { DealRepository, EvaluatedDeal } from "../domain/types.ts";
 
+/**
+ * PostgREST manda los filtros en la URL (`?item_id=in.(a,b,c...)`). Con ~1.500
+ * candidatos por corrida esa URL supera los 8 KB que aguanta el gateway y la
+ * petición se cae entera. Como el error se ignoraba, el resultado era una lista
+ * vacía de "ya vistos": todo parecía nuevo y se volvía a avisar de lo mismo
+ * corrida tras corrida. De ahí venían las ThinkPads repetidas.
+ */
+const FILTER_CHUNK = 120;
+
+function chunked<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export class SupabaseDealRepository implements DealRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
   async filterUnseen(itemIds: string[]): Promise<string[]> {
     if (itemIds.length === 0) return [];
-    const { data } = await this.supabase.from("seen_listings").select("item_id").in("item_id", itemIds);
-    const seen = new Set((data ?? []).map((r) => r.item_id as string));
+    const seen = new Set<string>();
+    for (const batch of chunked(itemIds, FILTER_CHUNK)) {
+      const { data, error } = await this.supabase
+        .from("seen_listings")
+        .select("item_id")
+        .in("item_id", batch);
+      // Se propaga en vez de seguir con datos incompletos: tratar como nuevo
+      // algo que ya se avisó es justo el error que hay que evitar.
+      if (error) throw new Error(`No se pudo consultar lo ya visto: ${error.message}`);
+      for (const row of data ?? []) seen.add(row.item_id as string);
+    }
     return itemIds.filter((id) => !seen.has(id));
   }
 
   async findKnownFingerprints(fingerprints: string[]): Promise<Set<string>> {
     if (fingerprints.length === 0) return new Set();
-    const { data } = await this.supabase
-      .from("seen_listings")
-      .select("fingerprint")
-      .eq("qualified", true)
-      .in("fingerprint", fingerprints);
-    return new Set((data ?? []).map((r) => r.fingerprint as string));
+    const known = new Set<string>();
+    // Las huellas son títulos enteros normalizados, así que ocupan mucho más
+    // que un item_id en la URL: van de a menos.
+    for (const batch of chunked(fingerprints, Math.floor(FILTER_CHUNK / 4))) {
+      const { data, error } = await this.supabase
+        .from("seen_listings")
+        .select("fingerprint")
+        .eq("qualified", true)
+        .in("fingerprint", batch);
+      if (error) throw new Error(`No se pudieron consultar las huellas: ${error.message}`);
+      for (const row of data ?? []) known.add(row.fingerprint as string);
+    }
+    return known;
   }
 
   async findAuctionsToAlert(options: {
@@ -29,7 +60,7 @@ export class SupabaseDealRepository implements DealRepository {
     const now = Date.now();
     const until = new Date(now + options.maxHoursLeft * 3_600_000).toISOString();
 
-    const { data } = await this.supabase
+    const { data, error } = await this.supabase
       .from("seen_listings")
       .select("*")
       .eq("qualified", true)
@@ -42,6 +73,7 @@ export class SupabaseDealRepository implements DealRepository {
       .gt("end_date", new Date(now).toISOString())
       .order("end_date", { ascending: true })
       .limit(options.limit);
+    if (error) throw new Error(`No se pudieron buscar las subastas por cerrar: ${error.message}`);
 
     return (data ?? []).map((row) => ({
       itemId: row.item_id,
@@ -75,15 +107,39 @@ export class SupabaseDealRepository implements DealRepository {
   }
 
   async markAuctionsAlerted(itemIds: string[]): Promise<void> {
+    await this.stamp(itemIds, "auction_alerted_at");
+  }
+
+  async findNotifiableKeys(itemIds: string[]): Promise<Map<string, string>> {
+    if (itemIds.length === 0) return new Map();
+    // La decisión vive en Postgres (filter_notifiable) y no acá: cruzar lo
+    // visto en el dashboard con lo ya avisado es un join, y traerse las dos
+    // tablas enteras a Deno para hacerlo a mano sería peor en todo sentido.
+    // Va por POST, así que acá no hay límite de largo de URL que respetar.
+    const { data, error } = await this.supabase.rpc("filter_notifiable", { p_item_ids: itemIds });
+    if (error) throw new Error(`No se pudo filtrar lo ya avisado: ${error.message}`);
+    return new Map((data ?? []).map((r: { item_id: string; model_key: string }) => [r.item_id, r.model_key]));
+  }
+
+  async markNotified(itemIds: string[]): Promise<void> {
+    await this.stamp(itemIds, "notified_at");
+  }
+
+  /** Pone la fecha de ahora en una columna, de a tandas y sin tragarse errores. */
+  private async stamp(itemIds: string[], column: "notified_at" | "auction_alerted_at"): Promise<void> {
     if (itemIds.length === 0) return;
-    await this.supabase
-      .from("seen_listings")
-      .update({ auction_alerted_at: new Date().toISOString() })
-      .in("item_id", itemIds);
+    const now = new Date().toISOString();
+    for (const batch of chunked(itemIds, FILTER_CHUNK)) {
+      const { error } = await this.supabase
+        .from("seen_listings")
+        .update({ [column]: now })
+        .in("item_id", batch);
+      if (error) throw new Error(`No se pudo marcar ${column}: ${error.message}`);
+    }
   }
 
   async save(deal: EvaluatedDeal): Promise<void> {
-    await this.supabase.from("seen_listings").upsert({
+    const { error } = await this.supabase.from("seen_listings").upsert({
       item_id: deal.itemId,
       title: deal.title,
       price: deal.price,
@@ -111,7 +167,13 @@ export class SupabaseDealRepository implements DealRepository {
       seller_feedback_score: deal.sellerFeedbackScore,
       seller_feedback_percentage: deal.sellerFeedbackPercentage,
       fingerprint: deal.fingerprint,
-      notified_at: deal.qualified ? new Date().toISOString() : null,
+      // notified_at queda fuera del upsert a propósito: lo escribe
+      // markNotified() recién cuando el mensaje salió bien. Antes se marcaba
+      // acá, al guardar, así que la columna decía "calificó" en vez de "se
+      // avisó" y no servía para no repetir.
     });
+    // Un guardado que falla en silencio deja el ítem como "no visto" para
+    // siempre: se vuelve a encontrar, a evaluar y a avisar en cada corrida.
+    if (error) throw new Error(`No se pudo guardar ${deal.itemId}: ${error.message}`);
   }
 }

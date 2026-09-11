@@ -170,6 +170,16 @@ export interface DealRepository {
    */
   findAuctionsToAlert(options: { maxPrice: number; maxHoursLeft: number; limit: number }): Promise<EvaluatedDeal[]>;
   markAuctionsAlerted(itemIds: string[]): Promise<void>;
+  /**
+   * De los ítems dados, cuáles todavía no se avisaron, con su clave de
+   * máquina. Un ítem se suprime cuando otra publicación del mismo equipo ya
+   * se mandó a Telegram o ya la marcaste como vista en el dashboard: el
+   * mismo vendedor republicando a otro precio genera un item_id nuevo, y sin
+   * esto eso alcanzaba para que sonara el teléfono otra vez.
+   */
+  findNotifiableKeys(itemIds: string[]): Promise<Map<string, string>>;
+  /** Marca lo que efectivamente salió a Telegram. */
+  markNotified(itemIds: string[]): Promise<void>;
 }
 
 /** Puerto: un canal de notificación (Telegram hoy; push/WhatsApp mañana). */
