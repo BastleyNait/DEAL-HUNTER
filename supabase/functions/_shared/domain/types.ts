@@ -163,6 +163,13 @@ export interface DealRepository {
   /** De las huellas dadas, cuáles ya existen como oferta calificada. */
   findKnownFingerprints(fingerprints: string[]): Promise<Set<string>>;
   save(deal: EvaluatedDeal): Promise<void>;
+  /**
+   * Subastas ya guardadas que recién ahora entran en su último tramo y todavía
+   * no se avisaron. Sin esto una subasta encontrada con días de anticipación
+   * nunca se avisaría: cada publicación se evalúa una sola vez.
+   */
+  findAuctionsToAlert(options: { maxPrice: number; maxHoursLeft: number; limit: number }): Promise<EvaluatedDeal[]>;
+  markAuctionsAlerted(itemIds: string[]): Promise<void>;
 }
 
 /** Puerto: un canal de notificación (Telegram hoy; push/WhatsApp mañana). */
@@ -256,6 +263,15 @@ export interface SearchConfig {
    */
   notifyOnlyGreatDeals: boolean;
   maxNotificationsPerRun: number;
+  /**
+   * Las subastas no se avisan al encontrarlas sino cuando entran en su último
+   * tramo: avisar con 5 días por delante es ruido, porque el precio todavía va
+   * a moverse mucho. Y solo si la puja actual deja margen para ofertar por
+   * debajo del tope.
+   */
+  auctionAlertMaxHoursLeft: number;
+  auctionAlertMaxPrice: number;
+  maxAuctionAlertsPerRun: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];
   /**

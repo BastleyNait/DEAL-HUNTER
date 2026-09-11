@@ -194,8 +194,49 @@ export class HuntService {
       }
     }
 
-    await this.notifyQualified(config, qualifiedDeals);
+    // Las subastas no entran acá: tienen su propia pasada, que las avisa recién
+    // cuando están por cerrar.
+    await this.notifyQualified(config, qualifiedDeals.filter((d) => !d.isAuction));
+    await this.notifyClosingAuctions(config);
     return stats;
+  }
+
+  /**
+   * Avisa las subastas que recién ahora entran en su último tramo y dejan
+   * margen para pujar. Va contra lo guardado, no contra lo encontrado en esta
+   * corrida: una subasta descubierta con días de anticipación nunca se
+   * re-evalúa, así que si dependiera del hallazgo no se avisaría jamás.
+   */
+  private async notifyClosingAuctions(config: SearchConfig): Promise<void> {
+    let closing: EvaluatedDeal[];
+    try {
+      closing = await this.dealRepository.findAuctionsToAlert({
+        maxPrice: config.auctionAlertMaxPrice,
+        maxHoursLeft: config.auctionAlertMaxHoursLeft,
+        limit: config.maxAuctionAlertsPerRun,
+      });
+    } catch (err) {
+      console.error("Falló la búsqueda de subastas por cerrar:", err);
+      return;
+    }
+
+    const alerted: string[] = [];
+    for (const deal of closing) {
+      try {
+        await this.notificationChannel.notify(deal);
+        alerted.push(deal.itemId);
+      } catch (err) {
+        console.error(`Falló el aviso de subasta ${deal.itemId}:`, err);
+      }
+    }
+
+    // Se marcan solo las que efectivamente se avisaron, así una que falló se
+    // reintenta en la próxima corrida en vez de perderse.
+    try {
+      await this.dealRepository.markAuctionsAlerted(alerted);
+    } catch (err) {
+      console.error("Falló el marcado de subastas avisadas:", err);
+    }
   }
 
   /**
@@ -207,8 +248,7 @@ export class HuntService {
   private async notifyQualified(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
     if (deals.length === 0) return;
 
-    // Las CPUs prioritarias avisan siempre, aunque no lleguen a ofertaza — y
-    // eso incluye las subastas, que por definición ya no pueden ser ofertaza.
+    // Las CPUs prioritarias avisan siempre, aunque no lleguen a ofertaza.
     const worthPinging = config.notifyOnlyGreatDeals
       ? deals.filter((d) => d.isGreatDeal || d.isPriority)
       : deals;

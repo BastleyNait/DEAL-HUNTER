@@ -21,6 +21,67 @@ export class SupabaseDealRepository implements DealRepository {
     return new Set((data ?? []).map((r) => r.fingerprint as string));
   }
 
+  async findAuctionsToAlert(options: {
+    maxPrice: number;
+    maxHoursLeft: number;
+    limit: number;
+  }): Promise<EvaluatedDeal[]> {
+    const now = Date.now();
+    const until = new Date(now + options.maxHoursLeft * 3_600_000).toISOString();
+
+    const { data } = await this.supabase
+      .from("seen_listings")
+      .select("*")
+      .eq("qualified", true)
+      .eq("is_auction", true)
+      .is("auction_alerted_at", null)
+      .not("end_date", "is", null)
+      .lte("price", options.maxPrice)
+      // Ya dentro de la ventana y todavía abierta.
+      .lte("end_date", until)
+      .gt("end_date", new Date(now).toISOString())
+      .order("end_date", { ascending: true })
+      .limit(options.limit);
+
+    return (data ?? []).map((row) => ({
+      itemId: row.item_id,
+      title: row.title,
+      price: row.price === null ? null : Number(row.price),
+      currency: row.currency,
+      condition: row.condition,
+      cpuMatch: row.cpu_match,
+      url: row.url,
+      imageUrl: row.image_url,
+      qualified: row.qualified,
+      rejectReason: row.reject_reason ?? undefined,
+      score: row.score === null ? null : Number(row.score),
+      isGreatDeal: row.is_great_deal,
+      isPriority: row.is_priority,
+      hasDescription: row.has_description,
+      hasBatteryInfo: row.has_battery_info,
+      batteryGrade: row.battery_grade,
+      isAuction: row.is_auction,
+      hasBestOffer: row.has_best_offer,
+      endDate: row.end_date,
+      sellerUsername: row.seller_username,
+      sellerFeedbackScore: row.seller_feedback_score,
+      sellerFeedbackPercentage: row.seller_feedback_percentage,
+      sellerDescription: row.seller_description ?? "",
+      sellerDescriptionHtml: row.seller_description_html ?? "",
+      aspects: row.aspects ?? [],
+      additionalImages: row.additional_images ?? [],
+      fingerprint: row.fingerprint ?? "",
+    }));
+  }
+
+  async markAuctionsAlerted(itemIds: string[]): Promise<void> {
+    if (itemIds.length === 0) return;
+    await this.supabase
+      .from("seen_listings")
+      .update({ auction_alerted_at: new Date().toISOString() })
+      .in("item_id", itemIds);
+  }
+
   async save(deal: EvaluatedDeal): Promise<void> {
     await this.supabase.from("seen_listings").upsert({
       item_id: deal.itemId,

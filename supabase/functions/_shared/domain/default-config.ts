@@ -119,6 +119,9 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   maxCandidatesPerRun: 30,
   notifyOnlyGreatDeals: true,
   maxNotificationsPerRun: 8,
+  auctionAlertMaxHoursLeft: 24,
+  auctionAlertMaxPrice: 150,
+  maxAuctionAlertsPerRun: 6,
   minBatteryPercent: 70,
   // Las que más te interesan: encabezan el dashboard y se avisan por Telegram
   // aunque no califiquen como ofertaza.

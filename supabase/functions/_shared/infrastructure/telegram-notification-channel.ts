@@ -7,12 +7,15 @@ function escapeHtml(s: string): string {
 
 function formatMessage(deal: EvaluatedDeal): string {
   // Una subasta nunca se anuncia como ofertaza: el precio final es desconocido.
-  const header = deal.isGreatDeal
-    ? "🚨 <b>OFERTAZA</b>"
-    : deal.isPriority
-      ? "⭐ <b>CPU prioritaria</b>"
-      : "🔥 <b>Oferta encontrada</b>";
-  const auctionTag = deal.isAuction ? " 🔨 Subasta" : "";
+  // Y cuando se avisa es porque está por cerrar, así que eso encabeza.
+  const header = deal.isAuction
+    ? "⏰ <b>Subasta por cerrar</b>"
+    : deal.isGreatDeal
+      ? "🚨 <b>OFERTAZA</b>"
+      : deal.isPriority
+        ? "⭐ <b>CPU prioritaria</b>"
+        : "🔥 <b>Oferta encontrada</b>";
+  const auctionTag = deal.isAuction ? ` · ${timeLeft(deal.endDate)}` : "";
   const missing: string[] = [];
   if (!deal.hasDescription) missing.push("sin descripción");
   if (!deal.hasBatteryInfo) missing.push("sin dato de batería");
@@ -34,6 +37,16 @@ function formatMessage(deal: EvaluatedDeal): string {
 }
 
 const DIGEST_MAX_ITEMS = 12;
+
+/** Cuánto falta para el cierre, para que se pueda decidir sin abrir el link. */
+function timeLeft(endDate: string | null): string {
+  if (!endDate) return "cierre desconocido";
+  const minutes = Math.floor((new Date(endDate).getTime() - Date.now()) / 60_000);
+  if (minutes <= 0) return "cerrada";
+  const hours = Math.floor(minutes / 60);
+  if (hours < 1) return `cierra en ${minutes} min`;
+  return `cierra en ${hours}h ${minutes % 60}m`;
+}
 
 /**
  * Cada línea del resumen tiene que poder accionarse sola: precio, equipo y un
