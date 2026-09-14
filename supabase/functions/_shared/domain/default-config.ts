@@ -117,14 +117,15 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // recorre cada ~1 hora sin pasarse de la cuota diaria de la Browse API.
   profilesPerRun: 10,
   maxCandidatesPerRun: 30,
-  notifyOnlyGreatDeals: true,
+  // Solo avisa lo que supera este puntaje, sea compra directa o subasta.
+  notifyScoreAbove: 70,
   maxNotificationsPerRun: 8,
-  auctionAlertMaxHoursLeft: 24,
+  auctionAlertMaxMinutesLeft: 20,
   auctionAlertMaxPrice: 150,
   maxAuctionAlertsPerRun: 6,
   minBatteryPercent: 70,
-  // Las que más te interesan: encabezan el dashboard y se avisan por Telegram
-  // aunque no califiquen como ofertaza.
+  // Las que más te interesan: encabezan el dashboard y van primero en los
+  // avisos, siempre que superen notifyScoreAbove.
   priorityCpus: ["Intel i5 12th gen", "Intel i7 11th gen"],
   /**
    * Escalafón de reventa. Gana el primer patrón que matchea el título, así que
@@ -149,6 +150,31 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     { label: "Dell Latitude", pattern: "latitude", flags: "i", weight: 0.5 },
   ],
   modelFallbackWeight: 0.25,
+  /**
+   * Restas fijas al puntaje. La Latitude ya pesa menos en el factor de modelo,
+   * pero eso solo no alcanzaba para sacarla de los avisos: llegan con la tapa
+   * rayada y cuestan en la reventa.
+   *
+   * "Damage" se busca también en la descripción, pero ignorando dos cosas que
+   * en los datos reales eran la mitad de las menciones: la negación ("no
+   * missing or damaged parts", "damage free screen") y el texto de políticas
+   * ("unless the item arrived damaged", "transit damage", las leyendas de
+   * grados de los refurbishers). Lo que queda es el daño declarado del equipo:
+   * "paint damage on lid", "left-side hinge damaged".
+   */
+  scorePenalties: [
+    { label: "Dell Latitude", pattern: "latitude", flags: "i", points: 10, scope: "title", ignoreNegated: false },
+    {
+      label: "Declara daño",
+      pattern: "\\b(?:dmg|damaged?)\\b",
+      flags: "i",
+      points: 10,
+      scope: "titleAndDescription",
+      ignoreNegated: true,
+      ignoreContextPattern:
+        "ship|transit|package|parcel|carrier|\\bups\\b|fedex|usps|deliver|return|refund|claim|tamper|arriv|not as (?:described|shown)|warranty|misuse|abuse|accident|avoid|any signs of|materials recovery|sanitized|latches, hinges|used (?:excellent|fair|poor)|new open box",
+    },
+  ],
   // Cada patrón cubre dos formas de anunciar la CPU: (a) el modelo explícito
   // (i7-1165G7, i7-11800H, Ryzen 5 5500U...) con separador opcional (espacio,
   // guion, ®/™, o nada) y largo de dígitos variable (Intel usa 4 dígitos en

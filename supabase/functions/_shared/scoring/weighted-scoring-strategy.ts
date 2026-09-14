@@ -1,5 +1,6 @@
 import type { ListingDetail, ScoreFactor, ScoringContext, ScoringResult, ScoringStrategy, SearchConfig } from "../domain/types.ts";
 import { createModelFactor, DEFAULT_SCORE_FACTORS } from "./factors.ts";
+import { createScorePenalties, penaltyPoints } from "./penalties.ts";
 
 /**
  * Combina una lista de ScoreFactor pluggeable en un puntaje 0-100. Agregar un
@@ -13,10 +14,14 @@ export function createWeightedScoringStrategy(
     createModelFactor(config.modelTiers, config.modelFallbackWeight),
   ],
 ): ScoringStrategy {
+  const penalties = createScorePenalties(config.scorePenalties);
+
   return {
     score(listing: ListingDetail, ctx: ScoringContext): ScoringResult {
       const weighted = factors.reduce((sum, factor) => sum + factor.score(listing, ctx) * factor.weight, 0);
-      const score = Math.round(weighted * 100);
+      // Las penalizaciones se restan antes de decidir si es ofertaza, así una
+      // Latitude que quedaba justo en el umbral deja de serlo.
+      const score = Math.max(0, Math.round(weighted * 100) - penaltyPoints(penalties, listing));
 
       // Una subasta nunca es "ofertaza": el precio que vemos es la puja actual,
       // no lo que vas a terminar pagando, así que no hay forma de afirmar que

@@ -298,7 +298,8 @@ export class HuntService {
     try {
       closing = await this.dealRepository.findAuctionsToAlert({
         maxPrice: config.auctionAlertMaxPrice,
-        maxHoursLeft: config.auctionAlertMaxHoursLeft,
+        maxMinutesLeft: config.auctionAlertMaxMinutesLeft,
+        scoreAbove: config.notifyScoreAbove,
         limit: config.maxAuctionAlertsPerRun,
       });
     } catch (err) {
@@ -333,25 +334,24 @@ export class HuntService {
   }
 
   /**
-   * Con el pool ampliado pueden salir decenas de ofertas por corrida. Se avisan
-   * una por una solo las que valen interrumpir (ofertazas, las de mejor puntaje
-   * primero) y el resto va en un solo mensaje de resumen; todas quedan igual en
-   * el dashboard.
+   * Con el pool ampliado pueden salir decenas de ofertas por corrida. Solo se
+   * avisa lo que supera notifyScoreAbove: las mejores una por una (prioritarias
+   * primero, después por puntaje) y el resto en un solo mensaje de resumen.
+   * Todas quedan igual en el dashboard.
    */
   private async notifyQualified(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
-    if (deals.length === 0) return;
+    // Primero el umbral de puntaje: lo que no lo supera no se avisa de ninguna
+    // forma, ni suelto ni en el resumen. Las CPUs prioritarias tampoco tienen
+    // excepción; siguen yendo primero, pero tienen que llegar al puntaje.
+    const aboveThreshold = deals.filter((d) => (d.score ?? 0) > config.notifyScoreAbove);
+    if (aboveThreshold.length === 0) return;
 
-    // El filtro va primero: no tiene sentido gastar el cupo de avisos de la
+    // Después lo ya visto: no tiene sentido gastar el cupo de avisos de la
     // corrida en equipos que ya viste.
-    const notifiable = await this.selectNotifiable(deals);
+    const notifiable = await this.selectNotifiable(aboveThreshold);
     if (notifiable.length === 0) return;
 
-    // Las CPUs prioritarias avisan siempre, aunque no lleguen a ofertaza.
-    const worthPinging = config.notifyOnlyGreatDeals
-      ? notifiable.filter((d) => d.isGreatDeal || d.isPriority)
-      : notifiable;
-
-    const individual = [...worthPinging].sort(betterFirst).slice(0, config.maxNotificationsPerRun);
+    const individual = [...notifiable].sort(betterFirst).slice(0, config.maxNotificationsPerRun);
     const individualIds = new Set(individual.map((d) => d.itemId));
 
     const sent: string[] = [];

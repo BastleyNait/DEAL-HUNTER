@@ -168,7 +168,12 @@ export interface DealRepository {
    * no se avisaron. Sin esto una subasta encontrada con días de anticipación
    * nunca se avisaría: cada publicación se evalúa una sola vez.
    */
-  findAuctionsToAlert(options: { maxPrice: number; maxHoursLeft: number; limit: number }): Promise<EvaluatedDeal[]>;
+  findAuctionsToAlert(options: {
+    maxPrice: number;
+    maxMinutesLeft: number;
+    scoreAbove: number;
+    limit: number;
+  }): Promise<EvaluatedDeal[]>;
   markAuctionsAlerted(itemIds: string[]): Promise<void>;
   /**
    * De los ítems dados, cuáles todavía no se avisaron, con su clave de
@@ -230,6 +235,27 @@ export interface ModelTierConfig {
 }
 
 /**
+ * Puntos que se restan al puntaje final cuando el listing menciona algo que
+ * frena la reventa. No descarta: la oferta sigue en el dashboard, solo baja.
+ */
+export interface ScorePenaltyConfig {
+  label: string;
+  pattern: string;
+  flags: string;
+  points: number;
+  /** Dónde buscar: solo el título, o título más descripción. */
+  scope: "title" | "titleAndDescription";
+  /** No penalizar "no damage", "without damage", "damage free". */
+  ignoreNegated: boolean;
+  /**
+   * Si la oración donde aparece matchea esto, no cuenta. Sirve para sacar el
+   * texto de políticas ("unless the item arrived damaged") que no habla del
+   * equipo sino del envío o las devoluciones.
+   */
+  ignoreContextPattern?: string;
+}
+
+/**
  * Todo lo que define "qué es una oferta interesante". Tiene un valor por defecto
  * (default-config.ts) pero se puede sobreescribir por fila en la tabla `search_config`
  * sin redeployar la función — así queda escalable a más perfiles de búsqueda a futuro.
@@ -266,27 +292,30 @@ export interface SearchConfig {
   profilesPerRun: number;
   maxCandidatesPerRun: number;
   /**
-   * Política de aviso: con el pool ampliado aparecen decenas de ofertas por
-   * corrida, así que Telegram recibe una por una solo las ofertazas (hasta
-   * maxNotificationsPerRun) y el resto va en un único mensaje de resumen.
+   * Política de aviso: a Telegram solo llega lo que tiene puntaje estrictamente
+   * mayor a este valor, subastas incluidas. De eso, las mejores van una por una
+   * (hasta maxNotificationsPerRun) y el resto en un único mensaje de resumen.
    * Todo queda igual en el dashboard, se avise o no.
    */
-  notifyOnlyGreatDeals: boolean;
+  notifyScoreAbove: number;
   maxNotificationsPerRun: number;
   /**
-   * Las subastas no se avisan al encontrarlas sino cuando entran en su último
-   * tramo: avisar con 5 días por delante es ruido, porque el precio todavía va
-   * a moverse mucho. Y solo si la puja actual deja margen para ofertar por
-   * debajo del tope.
+   * Las subastas no se avisan al encontrarlas sino cuando están por cerrar:
+   * antes el precio todavía se mueve mucho y el aviso es ruido. Y solo si la
+   * puja actual deja margen para ofertar por debajo del tope.
+   *
+   * Ojo con el cron: corre cada 15 minutos, así que con una ventana de 20 el
+   * aviso llega con entre 5 y 20 minutos por delante. Una ventana menor que
+   * el intervalo del cron dejaría subastas sin avisar.
    */
-  auctionAlertMaxHoursLeft: number;
+  auctionAlertMaxMinutesLeft: number;
   auctionAlertMaxPrice: number;
   maxAuctionAlertsPerRun: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];
   /**
-   * CPUs que van primero: encabezan el dashboard y se avisan por Telegram
-   * aunque no lleguen a "ofertaza". Son las etiquetas de cpuPatterns.
+   * CPUs que van primero: encabezan el dashboard y encabezan los avisos de
+   * Telegram, siempre que superen notifyScoreAbove. Son las etiquetas de cpuPatterns.
    */
   priorityCpus: string[];
   /**
@@ -297,6 +326,8 @@ export interface SearchConfig {
    */
   modelTiers: ModelTierConfig[];
   modelFallbackWeight: number;
+  /** Restas al puntaje final (ver ScorePenaltyConfig). */
+  scorePenalties: ScorePenaltyConfig[];
   /** Frases que descartan, buscadas en título + descripción. */
   excludePatterns: ExcludePatternConfig[];
   /**

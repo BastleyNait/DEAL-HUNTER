@@ -66,6 +66,47 @@ export function declaresDamage(text: string): boolean {
   return false;
 }
 
+// "Damage Free Screen", "damage-free": la negación va después de la palabra.
+const NEGATION_AFTER_RE = /^[\s-]*free\b/i;
+
+// Dónde termina una oración. Incluye los separadores de lista que usan los
+// refurbishers ("⋅", "|", "•"), que en la práctica funcionan como puntos.
+const SENTENCE_BOUNDARY_RE = /[.!?\n⋅|•]/;
+
+function sentenceAround(text: string, start: number, end: number): string {
+  let from = start;
+  while (from > 0 && !SENTENCE_BOUNDARY_RE.test(text[from - 1])) from--;
+  let to = end;
+  while (to < text.length && !SENTENCE_BOUNDARY_RE.test(text[to])) to++;
+  return text.slice(from, to);
+}
+
+/**
+ * true si `pattern` aparece al menos una vez hablando del equipo: sin negar
+ * ("no damage", "damage free") y fuera de una oración que matchee
+ * `ignoreContext` (típicamente la política de envíos y devoluciones).
+ */
+export function mentionsOutsideContext(
+  text: string,
+  pattern: RegExp,
+  options: { ignoreNegated: boolean; ignoreContext?: RegExp },
+): boolean {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  for (const match of text.matchAll(new RegExp(pattern.source, flags))) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (
+      options.ignoreNegated &&
+      (NEGATION_BEFORE_RE.test(text.slice(0, start)) || NEGATION_AFTER_RE.test(text.slice(end)))
+    ) {
+      continue;
+    }
+    if (options.ignoreContext?.test(sentenceAround(text, start, end))) continue;
+    return true;
+  }
+  return false;
+}
+
 const MIN_DESCRIPTION_LENGTH = 20;
 
 /** true si el vendedor puso una descripción con contenido real (no vacía/boilerplate corta). */

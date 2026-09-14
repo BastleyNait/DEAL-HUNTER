@@ -54,11 +54,12 @@ export class SupabaseDealRepository implements DealRepository {
 
   async findAuctionsToAlert(options: {
     maxPrice: number;
-    maxHoursLeft: number;
+    maxMinutesLeft: number;
+    scoreAbove: number;
     limit: number;
   }): Promise<EvaluatedDeal[]> {
     const now = Date.now();
-    const until = new Date(now + options.maxHoursLeft * 3_600_000).toISOString();
+    const until = new Date(now + options.maxMinutesLeft * 60_000).toISOString();
 
     const { data, error } = await this.supabase
       .from("seen_listings")
@@ -68,6 +69,9 @@ export class SupabaseDealRepository implements DealRepository {
       .is("auction_alerted_at", null)
       .not("end_date", "is", null)
       .lte("price", options.maxPrice)
+      // En la consulta y no después: el límite por corrida se aplica sobre lo
+      // que ya pasó el umbral, no se gasta en subastas que no se iban a avisar.
+      .gt("score", options.scoreAbove)
       // Ya dentro de la ventana y todavía abierta.
       .lte("end_date", until)
       .gt("end_date", new Date(now).toISOString())
