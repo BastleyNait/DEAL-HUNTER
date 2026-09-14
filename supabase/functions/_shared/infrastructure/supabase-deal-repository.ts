@@ -56,12 +56,13 @@ export class SupabaseDealRepository implements DealRepository {
     maxPrice: number;
     maxMinutesLeft: number;
     scoreAbove: number;
+    excludedSellers: string[];
     limit: number;
   }): Promise<EvaluatedDeal[]> {
     const now = Date.now();
     const until = new Date(now + options.maxMinutesLeft * 60_000).toISOString();
 
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from("seen_listings")
       .select("*")
       .eq("qualified", true)
@@ -77,6 +78,15 @@ export class SupabaseDealRepository implements DealRepository {
       .gt("end_date", new Date(now).toISOString())
       .order("end_date", { ascending: true })
       .limit(options.limit);
+
+    if (options.excludedSellers.length > 0) {
+      // Comillas en cada valor para que un guion o un punto en el nombre no
+      // rompa la lista de PostgREST. Sin vendedor conocido no se excluye.
+      const list = options.excludedSellers.map((s) => `"${s}"`).join(",");
+      query = query.or(`seller_username.is.null,seller_username.not.in.(${list})`);
+    }
+
+    const { data, error } = await query;
     if (error) throw new Error(`No se pudieron buscar las subastas por cerrar: ${error.message}`);
 
     return (data ?? []).map((row) => ({

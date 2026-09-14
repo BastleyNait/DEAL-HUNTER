@@ -300,6 +300,7 @@ export class HuntService {
         maxPrice: config.auctionAlertMaxPrice,
         maxMinutesLeft: config.auctionAlertMaxMinutesLeft,
         scoreAbove: config.notifyScoreAbove,
+        excludedSellers: config.auctionAlertExcludedSellers,
         limit: config.maxAuctionAlertsPerRun,
       });
     } catch (err) {

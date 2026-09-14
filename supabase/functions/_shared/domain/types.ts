@@ -172,6 +172,7 @@ export interface DealRepository {
     maxPrice: number;
     maxMinutesLeft: number;
     scoreAbove: number;
+    excludedSellers: string[];
     limit: number;
   }): Promise<EvaluatedDeal[]>;
   markAuctionsAlerted(itemIds: string[]): Promise<void>;
@@ -310,6 +311,12 @@ export interface SearchConfig {
    */
   auctionAlertMaxMinutesLeft: number;
   auctionAlertMaxPrice: number;
+  /**
+   * Vendedores cuyas subastas no se avisan. Siguen en el dashboard. Es para
+   * vendedores con buenas pujas iniciales pero que casi siempre cierran por
+   * encima del presupuesto: el aviso a 20 minutos del final no sirve de nada.
+   */
+  auctionAlertExcludedSellers: string[];
   maxAuctionAlertsPerRun: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];

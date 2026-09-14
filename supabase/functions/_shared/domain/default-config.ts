@@ -122,6 +122,10 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   maxNotificationsPerRun: 8,
   auctionAlertMaxMinutesLeft: 20,
   auctionAlertMaxPrice: 150,
+  // Regency pone subastas con pujas bajas que casi siempre terminan por encima
+  // de $200: eran 24 de los 27 avisos de subasta del primer día con la
+  // ventana de 20 minutos, y ninguno servía.
+  auctionAlertExcludedSellers: ["regencytechnologies"],
   maxAuctionAlertsPerRun: 6,
   minBatteryPercent: 70,
   // Las que más te interesan: encabezan el dashboard y van primero en los

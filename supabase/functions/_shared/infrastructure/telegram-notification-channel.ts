@@ -103,8 +103,11 @@ export class TelegramNotificationChannel implements NotificationChannel {
       }),
     });
 
+    // Se lanza en vez de solo loguear: quien llama marca la oferta como avisada
+    // solo si esto no falla, y un rechazo de Telegram marcado como enviado es
+    // un aviso perdido que nadie ve.
     if (!res.ok) {
-      console.error(`Telegram sendMessage error ${res.status}: ${await res.text()}`);
+      throw new Error(`Telegram sendMessage error ${res.status}: ${await res.text()}`);
     }
   }
 }
