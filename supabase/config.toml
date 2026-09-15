@@ -2,3 +2,6 @@ project_id = "deal-hunter-revolt"
 
 [functions.hunt-deals]
 verify_jwt = false
+
+[functions.publish-deal]
+verify_jwt = false

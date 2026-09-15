@@ -362,6 +362,15 @@ export interface SearchConfig {
    * aviso tiene que comparar contra la puja actual.
    */
   refreshAlertWindowMinutes: number;
+  /**
+   * Precio de venta sugerido al publicar: (costo eBay + publishMarkupFlatUsd) ×
+   * publishMarkupMultiplier. El fijo cubre flete al casillero + envío a Perú;
+   * el multiplicador es el margen. Editable acá sin redeployar.
+   */
+  publishMarkupFlatUsd: number;
+  publishMarkupMultiplier: number;
+  /** Tipo de cambio para convertir el precio de venta a soles (campo `price` de REVOLT-LAP). */
+  publishUsdToPenRate: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];
   /**
@@ -394,4 +403,80 @@ export interface SearchConfig {
 /** Puerto: de dónde sale el SearchConfig activo (DB hoy, podría ser por-usuario mañana). */
 export interface ConfigProvider {
   getConfig(): Promise<SearchConfig>;
+}
+
+// ---------------------------------------------------------------------------
+// Publicación: de una oferta de eBay a la tienda propia (y, a futuro, a
+// Facebook Marketplace vía el worker local de Playwright — ver el repo
+// DEAL PUBLISHER, que consume la cola en la tabla `publications`).
+// ---------------------------------------------------------------------------
+
+/** Lo que devuelve resolver un link de eBay: detalle + copy ya sugerido. */
+export interface ResolvedListing {
+  itemId: string;
+  url: string;
+  title: string;
+  suggestedTitle: string;
+  suggestedDescription: string;
+  priceUsd: number | null;
+  condition: string | null;
+  images: string[];
+  cpuMatch: string | null;
+}
+
+/** Lo que el usuario confirma publicar, después de editar el borrador sugerido. */
+export interface PublishDraft {
+  itemId: string;
+  ebayUrl: string;
+  title: string;
+  description: string;
+  priceUsd: number;
+  /** Precio de venta convertido a soles, para el campo `price` de REVOLT-LAP. */
+  pricePen: number;
+  costUsd: number;
+  currency: string;
+  imageUrls: string[];
+  // Structured specs para las tiles de la ficha de producto. Se derivan del
+  // detalle de eBay en publish-service, no los edita el usuario en el panel.
+  brand: string;
+  conditionGrade: string;
+  processor: string | null;
+  ram: string | null;
+  storage: string | null;
+  display: string | null;
+  batteryHealth: string | null;
+}
+
+export interface StorePublishResult {
+  productId: string;
+  slug: string;
+}
+
+/** Puerto: publicar el borrador en la tienda propia. Un adapter por canal (tienda, mañana Marketplace directo si Meta lo habilita). */
+export interface StorePublishTarget {
+  publish(draft: PublishDraft): Promise<StorePublishResult>;
+}
+
+export interface PublicationStatus {
+  itemId: string;
+  storeSlug: string | null;
+  storePublishedAt: string | null;
+  facebookStatus: "none" | "queued" | "posted" | "failed" | "skipped";
+}
+
+/** Puerto: persistencia de publicaciones ya hechas (evita publicar dos veces, alimenta la cola de Facebook). */
+export interface PublicationRepository {
+  findStatuses(itemIds: string[]): Promise<Map<string, PublicationStatus>>;
+  save(record: {
+    itemId: string;
+    ebayUrl: string;
+    title: string;
+    description: string;
+    priceUsd: number;
+    costUsd: number;
+    currency: string;
+    imageUrls: string[];
+    store: StorePublishResult;
+    queueForFacebook: boolean;
+  }): Promise<void>;
 }

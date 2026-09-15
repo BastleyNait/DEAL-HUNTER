@@ -130,6 +130,11 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   refreshCallsPerRun: 20,
   refreshStaleMinutes: 120,
   refreshAlertWindowMinutes: 40,
+  // (costo + $40 de flete al casillero) × 1.60 de margen.
+  publishMarkupFlatUsd: 40,
+  publishMarkupMultiplier: 1.6,
+  // Mismo valor por defecto que NEXT_PUBLIC_USD_RATE en REVOLT-LAP.
+  publishUsdToPenRate: 3.7,
   minBatteryPercent: 70,
   // Las que más te interesan: encabezan el dashboard y van primero en los
   // avisos, siempre que superen notifyScoreAbove.
