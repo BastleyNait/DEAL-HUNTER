@@ -23,6 +23,21 @@ export interface ListingSummary {
   sellerFeedbackScore: number | null;
   /** % de feedback positivo del vendedor. */
   sellerFeedbackPercentage: number | null;
+  /** Cantidad de pujas. Null en publicaciones a precio fijo. */
+  bidCount: number | null;
+}
+
+/**
+ * Estado actual de una publicación ya conocida: si se puede comprar y a qué
+ * precio. En una subasta, `price` es la puja actual.
+ */
+export interface ListingStatus {
+  id: string;
+  /** false si se vendió, terminó o eBay ya no la encuentra. */
+  available: boolean;
+  price: number | null;
+  bidCount: number | null;
+  endDate: string | null;
 }
 
 export interface ListingAspect {
@@ -70,6 +85,8 @@ export interface SearchProfile {
 export interface MarketplaceClient {
   search(config: SearchConfig, profile: SearchProfile, page: SearchPage): Promise<ListingSummary[]>;
   getDetail(id: string): Promise<ListingDetail>;
+  /** Consulta liviana de disponibilidad y precio, para refrescar lo guardado. */
+  getStatus(id: string): Promise<ListingStatus>;
 }
 
 export interface CpuMatch {
@@ -145,6 +162,7 @@ export interface EvaluatedDeal {
   hasBestOffer: boolean;
   /** Cierre de la subasta (ISO), para poder priorizar las que están por terminar. */
   endDate: string | null;
+  bidCount: number | null;
   sellerUsername: string | null;
   sellerFeedbackScore: number | null;
   sellerFeedbackPercentage: number | null;
@@ -186,6 +204,17 @@ export interface DealRepository {
   findNotifiableKeys(itemIds: string[]): Promise<Map<string, string>>;
   /** Marca lo que efectivamente salió a Telegram. */
   markNotified(itemIds: string[]): Promise<void>;
+  /** Qué publicaciones refrescar con el presupuesto de llamadas de la corrida. */
+  findListingsToRefresh(options: {
+    limit: number;
+    staleMinutes: number;
+    alertWindowMinutes: number;
+    alertMaxPrice: number;
+    scoreAbove: number;
+    excludedSellers: string[];
+  }): Promise<string[]>;
+  /** Guarda disponibilidad y precio actuales. Devuelve cuántas filas tocó. */
+  applyStatuses(statuses: ListingStatus[]): Promise<number>;
 }
 
 /** Puerto: un canal de notificación (Telegram hoy; push/WhatsApp mañana). */
@@ -318,6 +347,21 @@ export interface SearchConfig {
    */
   auctionAlertExcludedSellers: string[];
   maxAuctionAlertsPerRun: number;
+  /**
+   * Refresco de precio y disponibilidad. Cada publicación cuesta una llamada a
+   * la Browse API (la consulta en lote no está habilitada para esta cuenta), y
+   * la cuota es de 5.000 por día: con el cron cada 15 minutos, 20 por corrida
+   * son ~1.900 diarias, sobre ~1.300 que ya usan las búsquedas.
+   */
+  refreshCallsPerRun: number;
+  /** Cuánto tiempo se considera fresco un precio antes de volver a consultarlo. */
+  refreshStaleMinutes: number;
+  /**
+   * Subastas que cierran dentro de esta ventana se refrescan siempre, antes que
+   * nada: son las que se van a avisar en esta corrida o la siguiente, y el
+   * aviso tiene que comparar contra la puja actual.
+   */
+  refreshAlertWindowMinutes: number;
   minBatteryPercent: number;
   cpuPatterns: CpuPatternConfig[];
   /**

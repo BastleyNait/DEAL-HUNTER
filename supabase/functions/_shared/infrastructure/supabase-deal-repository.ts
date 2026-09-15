@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import type { DealRepository, EvaluatedDeal } from "../domain/types.ts";
+import type { DealRepository, EvaluatedDeal, ListingStatus } from "../domain/types.ts";
 
 /**
  * PostgREST manda los filtros en la URL (`?item_id=in.(a,b,c...)`). Con ~1.500
@@ -67,6 +67,7 @@ export class SupabaseDealRepository implements DealRepository {
       .select("*")
       .eq("qualified", true)
       .eq("is_auction", true)
+      .eq("is_available", true)
       .is("auction_alerted_at", null)
       .not("end_date", "is", null)
       .lte("price", options.maxPrice)
@@ -109,6 +110,7 @@ export class SupabaseDealRepository implements DealRepository {
       isAuction: row.is_auction,
       hasBestOffer: row.has_best_offer,
       endDate: row.end_date,
+      bidCount: row.bid_count,
       sellerUsername: row.seller_username,
       sellerFeedbackScore: row.seller_feedback_score,
       sellerFeedbackPercentage: row.seller_feedback_percentage,
@@ -137,6 +139,44 @@ export class SupabaseDealRepository implements DealRepository {
 
   async markNotified(itemIds: string[]): Promise<void> {
     await this.stamp(itemIds, "notified_at");
+  }
+
+  async findListingsToRefresh(options: {
+    limit: number;
+    staleMinutes: number;
+    alertWindowMinutes: number;
+    alertMaxPrice: number;
+    scoreAbove: number;
+    excludedSellers: string[];
+  }): Promise<string[]> {
+    if (options.limit <= 0) return [];
+    // La priorización vive en Postgres (find_listings_to_refresh): son tres
+    // conjuntos con órdenes distintos intercalados, que en SQL es una consulta
+    // y acá serían tres idas y vueltas.
+    const { data, error } = await this.supabase.rpc("find_listings_to_refresh", {
+      p_limit: options.limit,
+      p_stale_minutes: options.staleMinutes,
+      p_alert_window_minutes: options.alertWindowMinutes,
+      p_alert_max_price: options.alertMaxPrice,
+      p_score_above: options.scoreAbove,
+      p_excluded_sellers: options.excludedSellers,
+    });
+    if (error) throw new Error(`No se pudo elegir qué refrescar: ${error.message}`);
+    return (data ?? []).map((r: { item_id: string }) => r.item_id);
+  }
+
+  async applyStatuses(statuses: ListingStatus[]): Promise<number> {
+    if (statuses.length === 0) return 0;
+    const rows = statuses.map((s) => ({
+      item_id: s.id,
+      available: s.available,
+      price: s.price,
+      bid_count: s.bidCount,
+      end_date: s.endDate,
+    }));
+    const { data, error } = await this.supabase.rpc("apply_listing_status", { p_rows: rows });
+    if (error) throw new Error(`No se pudo guardar el estado refrescado: ${error.message}`);
+    return Number(data ?? 0);
   }
 
   /** Pone la fecha de ahora en una columna, de a tandas y sin tragarse errores. */
@@ -173,6 +213,9 @@ export class SupabaseDealRepository implements DealRepository {
       is_auction: deal.isAuction,
       has_best_offer: deal.hasBestOffer,
       end_date: deal.endDate,
+      bid_count: deal.bidCount,
+      // Recién consultado a eBay para evaluarlo: el precio es fresco.
+      price_checked_at: new Date().toISOString(),
       seller_description: deal.sellerDescription,
       seller_description_html: deal.sellerDescriptionHtml,
       aspects: deal.aspects,

@@ -132,6 +132,11 @@ export class HuntService {
 
     // 2. Sacar los ya evaluados en corridas anteriores.
     const unseenIds = await this.dealRepository.filterUnseen([...candidates.keys()]);
+
+    // 2b. Lo ya conocido que volvió a aparecer en la búsqueda trae su precio
+    //     actual gratis, sin gastar llamadas: si está en los resultados sigue a
+    //     la venta, y en subastas el precio es la puja del momento.
+    await this.refreshFromSearch(candidates, new Set(unseenIds));
     const unseen = unseenIds
       .map((id) => candidates.get(id)!)
       // Cuando hay más candidatos que presupuesto de llamadas de detalle, se
@@ -248,8 +253,67 @@ export class HuntService {
     // Las subastas no entran acá: tienen su propia pasada, que las avisa recién
     // cuando están por cerrar.
     await this.notifyQualified(config, qualifiedDeals.filter((d) => !d.isAuction));
+    // El refresco va antes del aviso de subastas: ese aviso filtra por precio,
+    // y con la puja de cuando se encontró la subasta avisaba equipos que ya
+    // iban muy por encima del tope.
+    await this.refreshListings(config);
     await this.notifyClosingAuctions(config);
     return stats;
+  }
+
+  private async refreshFromSearch(candidates: Map<string, Candidate>, unseen: Set<string>): Promise<void> {
+    const known = [...candidates.values()]
+      .map((c) => c.summary)
+      .filter((s) => !unseen.has(s.id));
+    if (known.length === 0) return;
+
+    try {
+      await this.dealRepository.applyStatuses(
+        known.map((s) => ({ id: s.id, available: true, price: s.price, bidCount: s.bidCount, endDate: s.endDate })),
+      );
+    } catch (err) {
+      console.error("Falló el refresco desde la búsqueda:", err);
+    }
+  }
+
+  /**
+   * Consulta a eBay el estado actual de lo guardado, dentro del presupuesto de
+   * llamadas de la corrida: las subastas por avisar primero, después lo que
+   * encabeza el dashboard. Lo vendido o terminado se marca y sale del
+   * dashboard; lo demás actualiza precio y pujas.
+   */
+  private async refreshListings(config: SearchConfig): Promise<void> {
+    let ids: string[];
+    try {
+      ids = await this.dealRepository.findListingsToRefresh({
+        limit: config.refreshCallsPerRun,
+        staleMinutes: config.refreshStaleMinutes,
+        alertWindowMinutes: config.refreshAlertWindowMinutes,
+        alertMaxPrice: config.auctionAlertMaxPrice,
+        scoreAbove: config.notifyScoreAbove,
+        excludedSellers: config.auctionAlertExcludedSellers,
+      });
+    } catch (err) {
+      console.error("Falló la selección de publicaciones a refrescar:", err);
+      return;
+    }
+
+    const statuses = [];
+    for (const id of ids) {
+      try {
+        statuses.push(await this.marketplace.getStatus(id));
+      } catch (err) {
+        // Sin respuesta no se marca nada: mejor un precio viejo que dar por
+        // vendido algo que solo falló por un timeout.
+        console.error(`Falló el refresco de ${id}:`, err);
+      }
+    }
+
+    try {
+      await this.dealRepository.applyStatuses(statuses);
+    } catch (err) {
+      console.error("Falló el guardado del refresco:", err);
+    }
   }
 
   /**
@@ -420,6 +484,7 @@ export class HuntService {
       isAuction: listing.buyingOptions.includes("AUCTION"),
       hasBestOffer: listing.buyingOptions.includes("BEST_OFFER"),
       endDate: listing.endDate,
+      bidCount: listing.bidCount,
       sellerDescription: listing.sellerDescription,
       sellerDescriptionHtml: listing.sellerDescriptionHtml,
       aspects: listing.aspects,

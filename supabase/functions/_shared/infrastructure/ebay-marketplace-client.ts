@@ -1,5 +1,6 @@
 import type {
   ListingDetail,
+  ListingStatus,
   ListingSummary,
   MarketplaceClient,
   SearchConfig,
@@ -24,6 +25,10 @@ interface EbayItemSummaryDto {
   shortDescription?: string;
   itemEndDate?: string;
   seller?: { username?: string; feedbackScore?: number; feedbackPercentage?: string };
+  // En subastas, la búsqueda no trae `price`: la puja actual viene acá.
+  currentBidPrice?: { value: string; currency: string };
+  bidCount?: number;
+  estimatedAvailabilities?: { estimatedAvailabilityStatus?: string }[];
 }
 
 interface EbayItemDetailDto extends EbayItemSummaryDto {
@@ -57,8 +62,8 @@ function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
   return {
     id: dto.itemId,
     title: dto.title,
-    price: dto.price ? Number(dto.price.value) : null,
-    currency: dto.price?.currency ?? "USD",
+    price: currentPrice(dto),
+    currency: (dto.currentBidPrice ?? dto.price)?.currency ?? "USD",
     url: dto.itemWebUrl,
     imageUrl: dto.image?.imageUrl ?? null,
     condition: dto.condition ?? null,
@@ -70,7 +75,18 @@ function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
     sellerFeedbackScore: dto.seller?.feedbackScore ?? null,
     // eBay lo manda como string ("99.8").
     sellerFeedbackPercentage: parseNumber(dto.seller?.feedbackPercentage),
+    bidCount: dto.bidCount ?? null,
   };
+}
+
+/**
+ * En una subasta vale la puja actual. La búsqueda de eBay no manda `price`
+ * para subastas, solo `currentBidPrice`, así que leer únicamente `price`
+ * dejaba el precio en null hasta traer el detalle.
+ */
+function currentPrice(dto: EbayItemSummaryDto): number | null {
+  const money = dto.currentBidPrice ?? dto.price;
+  return money ? parseNumber(money.value) : null;
 }
 
 function parseNumber(value: string | undefined): number | null {
@@ -175,6 +191,43 @@ export class EbayMarketplaceClient implements MarketplaceClient {
       additionalImages: (dto.additionalImages ?? [])
         .map((img) => img.imageUrl)
         .filter((url): url is string => Boolean(url)),
+    };
+  }
+
+  async getStatus(id: string): Promise<ListingStatus> {
+    const token = await this.tokenStore.getValidToken();
+    const res = await fetch(`${API_BASE}/buy/browse/v1/item/${encodeURIComponent(id)}`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+        "Content-Type": "application/json",
+      },
+    });
+
+    // eBay devuelve 404 (errorId 11001) cuando la publicación terminó o se
+    // borró. No es un error del refresco: es la respuesta.
+    if (res.status === 404) {
+      await res.body?.cancel();
+      return { id, available: false, price: null, bidCount: null, endDate: null };
+    }
+    if (!res.ok) {
+      throw new Error(`eBay getItem error ${res.status}: ${await res.text()}`);
+    }
+
+    const dto = (await res.json()) as EbayItemDetailDto;
+    // Una publicación vendida sigue respondiendo 200, pero con disponibilidad
+    // OUT_OF_STOCK. Verificado contra la API real con una ThinkPad vendida.
+    const outOfStock = (dto.estimatedAvailabilities ?? []).some(
+      (a) => a.estimatedAvailabilityStatus === "OUT_OF_STOCK",
+    );
+    const ended = dto.itemEndDate ? new Date(dto.itemEndDate).getTime() <= Date.now() : false;
+
+    return {
+      id,
+      available: !outOfStock && !ended,
+      price: currentPrice(dto),
+      bidCount: dto.bidCount ?? null,
+      endDate: dto.itemEndDate ?? null,
     };
   }
 }

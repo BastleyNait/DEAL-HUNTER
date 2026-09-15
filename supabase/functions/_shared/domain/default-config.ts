@@ -127,6 +127,9 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // ventana de 20 minutos, y ninguno servía.
   auctionAlertExcludedSellers: ["regencytechnologies"],
   maxAuctionAlertsPerRun: 6,
+  refreshCallsPerRun: 20,
+  refreshStaleMinutes: 120,
+  refreshAlertWindowMinutes: 40,
   minBatteryPercent: 70,
   // Las que más te interesan: encabezan el dashboard y van primero en los
   // avisos, siempre que superen notifyScoreAbove.
