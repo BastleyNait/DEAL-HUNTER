@@ -127,6 +127,7 @@ export class PublishService {
       title: draft.title,
       description: draft.description,
       priceUsd: draft.priceUsd,
+      pricePen: draft.pricePen,
       costUsd: draft.costUsd,
       currency: draft.currency,
       imageUrls: draft.imageUrls,

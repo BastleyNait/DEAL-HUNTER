@@ -31,6 +31,7 @@ export class SupabasePublicationRepository implements PublicationRepository {
     title: string;
     description: string;
     priceUsd: number;
+    pricePen: number;
     costUsd: number;
     currency: string;
     imageUrls: string[];
@@ -43,6 +44,7 @@ export class SupabasePublicationRepository implements PublicationRepository {
       title: record.title,
       description: record.description,
       price_usd: record.priceUsd,
+      price_pen: record.pricePen,
       cost_usd: record.costUsd,
       currency: record.currency,
       image_urls: record.imageUrls,

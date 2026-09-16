@@ -473,6 +473,8 @@ export interface PublicationRepository {
     title: string;
     description: string;
     priceUsd: number;
+    /** Precio en soles: es el que se le muestra a Facebook, no priceUsd (ver migración 0031). */
+    pricePen: number;
     costUsd: number;
     currency: string;
     imageUrls: string[];

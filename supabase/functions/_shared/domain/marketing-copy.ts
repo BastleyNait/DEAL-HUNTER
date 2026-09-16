@@ -55,8 +55,11 @@ const AUDIENCE_COPY: Record<Audience, { hook: string; bullet: string }> = {
     bullet: "La pantalla gira 360° y es táctil: sirve como laptop y como tablet para tomar apuntes o dibujar.",
   },
   premium: {
+    // Esta franja sí es mayormente carcasa de aluminio/magnesio (ThinkPad
+    // T/X/P, EliteBook/ZBook, Precision) — no se generaliza a las otras
+    // franjas (Latitude, ProBook, E-series), que en su mayoría son plástico.
     hook: "de gama alta, para trabajo profesional",
-    bullet: "Línea empresarial de gama alta: construcción sólida, pensada para uso profesional intensivo.",
+    bullet: "Línea empresarial de gama alta: construcción premium en aluminio, pensada para uso profesional intensivo.",
   },
   business: {
     hook: "para oficina y estudio",
@@ -71,6 +74,29 @@ const AUDIENCE_COPY: Record<Audience, { hook: string; bullet: string }> = {
     bullet: "Anda bien para lo de todos los días: navegar, oficina, clases virtuales y streaming.",
   },
 };
+
+// Bloque de marca fijo, mismo texto en toda publicación.
+const STORE_URL = "https://revolt-laptops.vercel.app/";
+const STORE_SIGNATURE = "SOMOS REVOLT — RENDIMIENTO SIN COMPROMISOS";
+
+// Corta el título en el primer token que ya es una spec, no una descripción
+// del equipo: CPU ("i5-1135G7", "Ryzen 5"), RAM/storage ("16GB"), Windows, o
+// el separador "|" que usan los vendedores que apilan specs con pipes. Lo que
+// queda antes es "Marca + línea + modelo", para la línea de encabezado de la
+// descripción — igual que armarías vos la ficha a mano, pero derivado del
+// título real en vez de tipeado de nuevo.
+// El sufijo de CPU Intel puede terminar en letra+dígito ("...1165G7"), no solo
+// letras ("...1135U"): [a-z0-9]{0,3} cubre ambos en vez de solo [a-z]{0,2}.
+const SPEC_START_RE = /\b(?:i[3579][\s-]?\d{3,5}[a-z0-9]{0,3}\b|ryzen\s*\d|\d{1,3}\s?gb\b|\d\s?tb\b|win(?:dows)?\s?1[01]\b|@\s?\d|\|)/i;
+
+function extractModelLine(title: string): string {
+  const match = title.match(SPEC_START_RE);
+  const cut = match ? title.slice(0, match.index) : title;
+  return cut.replace(/[-|,\s]+$/, "").trim() || title.trim();
+}
+
+const NO_CHARGER_RE = /\bno\s+(?:ac\s+)?(?:charger|power\s+adapter|adapter)\b|charger\s+not\s+included|sin\s+cargador/i;
+const SCREEN_SIZE_ASPECT_RE = /screen\s*size/i;
 
 function detectAudience(title: string, modelTiers: ModelTierConfig[]): Audience {
   if (CONVERTIBLE_RE.test(title)) return "convertible";
@@ -111,19 +137,26 @@ export function brandFromTitle(title: string): string {
   return found ?? "";
 }
 
-export function conditionLabel(condition: string | null): string {
-  if (!condition) return "usada, en buen estado";
-  if (/refurbished/i.test(condition)) return "reacondicionada y probada";
-  if (/^new/i.test(condition)) return "nueva, sin uso";
-  return "usada, en buen estado";
+/**
+ * Línea de condición en mayúsculas para la descripción de venta. A propósito
+ * no dice "SEMI NUEVA" ni nada por el estilo para todo lo usado: eso es un
+ * juicio sobre una unidad puntual (raspones, uso real) que no sale de
+ * ninguna columna de eBay, y prometerlo de más genera reclamos. Se deriva de
+ * la condición que sí declaró el vendedor, y queda igual de editable en el
+ * panel si para un equipo concreto sabés que amerita algo más.
+ */
+function conditionHeadline(condition: string | null): string {
+  if (condition && /refurbished/i.test(condition)) return "REACONDICIONADO, EXCELENTE ESTADO";
+  if (condition && /^new/i.test(condition)) return "NUEVO, SIN USO";
+  return "USADO, BUEN ESTADO FUNCIONAL";
 }
 
 /**
- * Grado de condición para el campo `conditionGrade` de REVOLT-LAP. Distinto de
- * conditionLabel: ese es la frase en español para el copy de venta, este es
- * el valor corto en inglés-mayúsculas que ya usa el catálogo en producción
+ * Grado de condición para el campo `conditionGrade` de REVOLT-LAP: el valor
+ * corto en inglés-mayúsculas que ya usa el catálogo en producción
  * ("REFURBISHED" en los productos existentes) — se sigue esa convención en
- * vez de inventar una nueva.
+ * vez de inventar una nueva. Distinto de conditionHeadline, que es la frase
+ * en español para el copy de venta.
  */
 export function storeConditionGrade(condition: string | null): string {
   return condition && /refurbished/i.test(condition) ? "REFURBISHED" : "USED";
@@ -142,31 +175,52 @@ function buildTitle(brand: string, audience: Audience, ram: number, storageGb: n
   return title;
 }
 
-function buildDescription(
-  audience: Audience,
-  cpuSimplified: string | null,
-  ram: number,
-  storageGb: number,
-  conditionText: string,
-  batteryPct: number | null,
-): string {
-  const storage = storageGb >= 1000 ? `${Math.round(storageGb / 1000)}TB` : storageGb > 0 ? `${storageGb}GB` : null;
+function buildDescription(input: {
+  audience: Audience;
+  modelLine: string;
+  condition: string | null;
+  cpuSimplified: string | null;
+  ram: number;
+  storageGb: number;
+  screenSize: string | null;
+  batteryPct: number | null;
+  hasCharger: boolean;
+}): string {
+  const storage =
+    input.storageGb >= 1000 ? `${Math.round(input.storageGb / 1000)}TB` : input.storageGb > 0 ? `${input.storageGb}GB` : null;
 
   const specLines = [
-    cpuSimplified ? `💻 Procesador: ${cpuSimplified}` : null,
-    ram > 0 ? `🧠 Memoria RAM: ${ram}GB` : null,
+    input.cpuSimplified ? `💻 Procesador: ${input.cpuSimplified}` : null,
+    input.ram > 0 ? `🧠 Memoria RAM: ${input.ram}GB` : null,
     storage ? `💾 Almacenamiento: ${storage} SSD (arranque rápido)` : null,
-    batteryPct != null ? `🔋 Batería: ${batteryPct}% de su capacidad original` : null,
+    input.screenSize ? `🖥️ Pantalla: ${input.screenSize}` : null,
+    input.batteryPct != null ? `🔋 Batería: ${input.batteryPct}% de su capacidad original` : null,
   ].filter((l): l is string => Boolean(l));
 
+  // "Profesionalmente reacondicionado" es una afirmación sobre un proceso que
+  // se hizo — solo se pone cuando el propio vendedor de eBay ya declaró la
+  // publicación como reacondicionada. Para el resto, la frase más genérica
+  // de "revisado antes de publicar" ya estaba y sigue siendo cierta siempre.
+  const refurbLine =
+    input.condition && /refurbished/i.test(input.condition)
+      ? "🛡️ Profesionalmente reacondicionado."
+      : "✅ Revisado y probado antes de publicar.";
+
   const lines = [
-    AUDIENCE_COPY[audience].bullet,
+    AUDIENCE_COPY[input.audience].bullet,
     "",
+    input.modelLine,
+    conditionHeadline(input.condition),
     ...specLines,
+    refurbLine,
+    "🚚 Envíos a todo el Perú.",
+    input.hasCharger ? "Incluye cargador." : "Sin cargador (revisar la publicación original).",
+    "🛡️ Garantía de 6 meses por defectos de fábrica.",
     "",
-    `✅ Laptop ${conditionText}, revisada antes de publicar.`,
-    "🛡️ Garantía de 6 meses incluida.",
-    "🚚 Envío disponible.",
+    "Visitanos en",
+    STORE_URL,
+    "",
+    STORE_SIGNATURE,
     "",
     "Escribime y coordinamos 🙂",
   ];
@@ -178,15 +232,26 @@ export const ruleBasedMarketingCopy: MarketingCopyGenerator = {
   generate(input: MarketingCopyInput): MarketingCopy {
     const audience = detectAudience(input.title, input.modelTiers);
     const brand = brandFromTitle(input.title) || "";
-    const ram = extractRamGb(`${input.title} ${input.descriptionText}`);
-    const storageGb = extractStorageGb(`${input.title} ${input.descriptionText}`);
-    const battery = extractBatteryPercent(`${input.title} ${input.descriptionText}`);
+    const text = `${input.title} ${input.descriptionText}`;
+    const ram = extractRamGb(text);
+    const storageGb = extractStorageGb(text);
+    const battery = extractBatteryPercent(text);
     const cpuSimplified = simplifyCpu(input.cpuLabel);
-    const conditionText = conditionLabel(input.condition);
+    const screenAspect = input.aspects.find((a) => SCREEN_SIZE_ASPECT_RE.test(a.name));
 
     return {
       title: buildTitle(brand, audience, ram, storageGb),
-      description: buildDescription(audience, cpuSimplified, ram, storageGb, conditionText, battery),
+      description: buildDescription({
+        audience,
+        modelLine: extractModelLine(input.title),
+        condition: input.condition,
+        cpuSimplified,
+        ram,
+        storageGb,
+        screenSize: screenAspect?.value ?? null,
+        batteryPct: battery,
+        hasCharger: !NO_CHARGER_RE.test(text),
+      }),
     };
   },
 };
