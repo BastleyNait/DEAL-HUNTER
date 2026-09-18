@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.publish-deal]
 verify_jwt = false
+
+[functions.telegram-updates]
+verify_jwt = false

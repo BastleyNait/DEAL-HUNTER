@@ -84,14 +84,41 @@ export class TelegramNotificationChannel implements NotificationChannel {
     return this.send(formatDigest(deals), true);
   }
 
+  /**
+   * TELEGRAM_CHAT_ID acepta uno o varios ids separados por coma — así se
+   * suma gente al aviso sin tocar código, solo la secret. Cada destinatario
+   * es independiente: si a alguien le rebota (bloqueó el bot, chat borrado),
+   * eso no le impide recibir el aviso al resto ni hace que se reintente y
+   * les llegue duplicado en la próxima corrida. Solo se lanza si a NINGÚN
+   * destinatario le llegó, que es el caso real de "esto no se avisó".
+   */
   private async send(text: string, disablePreview: boolean): Promise<void> {
     const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-    const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
-    if (!token || !chatId) {
+    const chatIds = (Deno.env.get("TELEGRAM_CHAT_ID") ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    if (!token || chatIds.length === 0) {
       console.warn("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID no configurados, se omite notificación.");
       return;
     }
 
+    const results = await Promise.allSettled(chatIds.map((chatId) => this.sendTo(token, chatId, text, disablePreview)));
+
+    const failures = results
+      .map((r, i) => ({ r, chatId: chatIds[i] }))
+      .filter((x): x is { r: PromiseRejectedResult; chatId: string } => x.r.status === "rejected");
+    for (const { r, chatId } of failures) {
+      console.error(`Telegram: no le llegó a ${chatId}:`, r.reason);
+    }
+
+    if (failures.length === results.length) {
+      throw new Error(`Telegram sendMessage falló para los ${results.length} destinatario(s).`);
+    }
+  }
+
+  private async sendTo(token: string, chatId: string, text: string, disablePreview: boolean): Promise<void> {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,12 +129,8 @@ export class TelegramNotificationChannel implements NotificationChannel {
         disable_web_page_preview: disablePreview,
       }),
     });
-
-    // Se lanza en vez de solo loguear: quien llama marca la oferta como avisada
-    // solo si esto no falla, y un rechazo de Telegram marcado como enviado es
-    // un aviso perdido que nadie ve.
     if (!res.ok) {
-      throw new Error(`Telegram sendMessage error ${res.status}: ${await res.text()}`);
+      throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     }
   }
 }
