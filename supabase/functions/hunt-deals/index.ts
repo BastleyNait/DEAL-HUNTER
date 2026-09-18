@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     new EbayMarketplaceClient(new EbayTokenStore(supabase)),
     new SupabaseDealRepository(supabase),
     (config) => createWeightedScoringStrategy(config),
-    new TelegramNotificationChannel(),
+    new TelegramNotificationChannel(supabase),
   );
 
   try {

@@ -1,7 +1,9 @@
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { EvaluatedDeal, NotificationChannel } from "../domain/types.ts";
 import { needsBatteryGradeReview } from "../domain/hardware-signals.ts";
+import { getApprovedChatIds } from "./telegram-recipients.ts";
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
@@ -76,6 +78,8 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 
 /** Canal de notificación por Telegram. Implementá otro NotificationChannel (push, WhatsApp) sin tocar esto. */
 export class TelegramNotificationChannel implements NotificationChannel {
+  constructor(private readonly supabase: SupabaseClient) {}
+
   notify(deal: EvaluatedDeal): Promise<void> {
     return this.send(formatMessage(deal), false);
   }
@@ -85,22 +89,19 @@ export class TelegramNotificationChannel implements NotificationChannel {
   }
 
   /**
-   * TELEGRAM_CHAT_ID acepta uno o varios ids separados por coma — así se
-   * suma gente al aviso sin tocar código, solo la secret. Cada destinatario
-   * es independiente: si a alguien le rebota (bloqueó el bot, chat borrado),
-   * eso no le impide recibir el aviso al resto ni hace que se reintente y
-   * les llegue duplicado en la próxima corrida. Solo se lanza si a NINGÚN
-   * destinatario le llegó, que es el caso real de "esto no se avisó".
+   * Los destinatarios salen de telegram_recipients (aprobados vía el bot,
+   * ver telegram-webhook), no de una lista fija en la secret. Cada
+   * destinatario es independiente: si a alguien le rebota (bloqueó el bot,
+   * chat borrado), eso no le impide recibir el aviso al resto ni hace que se
+   * reintente y les llegue duplicado en la próxima corrida. Solo se lanza si
+   * a NINGÚN destinatario le llegó, que es el caso real de "esto no se avisó".
    */
   private async send(text: string, disablePreview: boolean): Promise<void> {
     const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-    const chatIds = (Deno.env.get("TELEGRAM_CHAT_ID") ?? "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean);
+    const chatIds = await getApprovedChatIds(this.supabase);
 
     if (!token || chatIds.length === 0) {
-      console.warn("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID no configurados, se omite notificación.");
+      console.warn("TELEGRAM_BOT_TOKEN sin configurar o ningún destinatario aprobado, se omite notificación.");
       return;
     }
 

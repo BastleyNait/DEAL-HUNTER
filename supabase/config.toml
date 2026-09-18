@@ -6,5 +6,8 @@ verify_jwt = false
 [functions.publish-deal]
 verify_jwt = false
 
-[functions.telegram-updates]
+[functions.telegram-admin]
+verify_jwt = false
+
+[functions.telegram-webhook]
 verify_jwt = false
