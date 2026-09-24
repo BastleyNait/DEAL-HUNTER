@@ -12,6 +12,7 @@ import type {
   SearchProfile,
 } from "../domain/types.ts";
 import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
+import { createSpecialDealMatcher } from "../domain/special-deals.ts";
 import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
@@ -27,19 +28,26 @@ interface Candidate {
   summary: ListingSummary;
   cpuLabel: string;
   cpuTier: number;
+  specialLabel: string | null;
 }
 
 /**
  * Toma una ventana rotativa del pool de vetas: cada corrida usa un tramo
  * distinto (según el id de corrida), así se cubre todo el pool a lo largo del
- * día sin gastar una llamada por veta en cada corrida.
+ * día sin gastar una llamada por veta en cada corrida. Las vetas especiales
+ * van siempre, adelante, fuera de la rotación.
  */
 export function selectProfiles(config: SearchConfig, rotationSeed: number): SearchProfile[] {
   const pool = config.searchProfiles;
-  if (pool.length === 0) return [];
-  const count = Math.min(config.profilesPerRun, pool.length);
-  const start = ((rotationSeed % pool.length) + pool.length) % pool.length;
-  return Array.from({ length: count }, (_, i) => pool[(start + i) % pool.length]);
+  const rotating =
+    pool.length === 0
+      ? []
+      : (() => {
+          const count = Math.min(config.profilesPerRun, pool.length);
+          const start = ((rotationSeed % pool.length) + pool.length) % pool.length;
+          return Array.from({ length: count }, (_, i) => pool[(start + i) % pool.length]);
+        })();
+  return [...config.specialSearchProfiles, ...rotating];
 }
 
 /**
@@ -51,6 +59,10 @@ export function selectProfiles(config: SearchConfig, rotationSeed: number): Sear
 function promiseOf(candidate: Candidate, config: SearchConfig): number {
   const title = candidate.summary.title;
   let promise = candidate.cpuTier * 10;
+
+  // Una especial nunca puede quedar afuera por el tope de candidatos por
+  // corrida: son pocas en todo eBay y es justo lo que se está buscando.
+  if (candidate.specialLabel) promise += 1000;
 
   if (config.priorityCpus.includes(candidate.cpuLabel)) promise += 40;
   if (extractRamGb(title) >= 16) promise += 35;
@@ -66,10 +78,11 @@ function promiseOf(candidate: Candidate, config: SearchConfig): number {
 }
 
 /**
- * Orden en que vale la pena interrumpir: primero las CPUs prioritarias, y
- * dentro de cada grupo por puntaje.
+ * Orden en que vale la pena interrumpir: primero las ofertas especiales,
+ * después las CPUs prioritarias, y dentro de cada grupo por puntaje.
  */
 function betterFirst(a: EvaluatedDeal, b: EvaluatedDeal): number {
+  if (Boolean(a.specialLabel) !== Boolean(b.specialLabel)) return a.specialLabel ? -1 : 1;
   if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
   return (b.score ?? 0) - (a.score ?? 0);
 }
@@ -94,6 +107,7 @@ export class HuntService {
   async run(rotationSeed = 0): Promise<RunStats> {
     const config = await this.configProvider.getConfig();
     const cpuMatcher = createCpuMatcher(config);
+    const specialMatcher = createSpecialDealMatcher(config);
     const exclusionRules = createExclusionRules(config);
     const scoringStrategy = this.buildScoringStrategy(config);
     const maxTier = maxCpuTier(config);
@@ -122,8 +136,22 @@ export class HuntService {
           // El título alcanza en la mayoría de los casos, pero la
           // shortDescription (gratis con fieldgroups=EXTENDED) rescata los que
           // no ponen el modelo de CPU en el título.
-          const cpu = cpuMatcher.match(item.title) ?? cpuMatcher.match(`${item.title} ${item.shortDescription}`);
-          if (cpu) candidates.set(item.id, { summary: item, cpuLabel: cpu.label, cpuTier: cpu.tier });
+          // Para los modelos especiales, si el título no trae un modelo de CPU
+          // reconocible, se deduce la generación del modelo (serie J = 11.ª):
+          // sin esto se descartaban acá, antes de evaluarse siquiera.
+          const special = specialMatcher.match(item.title);
+          const cpu =
+            cpuMatcher.match(item.title) ??
+            cpuMatcher.match(`${item.title} ${item.shortDescription}`) ??
+            (special ? specialMatcher.inferCpu(item.title, special) : null);
+          if (cpu) {
+            candidates.set(item.id, {
+              summary: item,
+              cpuLabel: cpu.label,
+              cpuTier: cpu.tier,
+              specialLabel: special?.label ?? null,
+            });
+          }
         }
 
         if (items.length < PAGE_SIZE) break;
@@ -406,9 +434,10 @@ export class HuntService {
    */
   private async notifyQualified(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
     // Primero el umbral de puntaje: lo que no lo supera no se avisa de ninguna
-    // forma, ni suelto ni en el resumen. Las CPUs prioritarias tampoco tienen
-    // excepción; siguen yendo primero, pero tienen que llegar al puntaje.
-    const aboveThreshold = deals.filter((d) => (d.score ?? 0) > config.notifyScoreAbove);
+    // forma, ni suelto ni en el resumen. Las CPUs prioritarias no tienen
+    // excepción. Las ofertas especiales sí: el puntaje castiga los 8GB, pero
+    // una de las compras reales de este modelo fue justamente de 8GB.
+    const aboveThreshold = deals.filter((d) => d.specialLabel || (d.score ?? 0) > config.notifyScoreAbove);
     if (aboveThreshold.length === 0) return;
 
     // Después lo ya visto: no tiene sentido gastar el cupo de avisos de la
@@ -478,6 +507,7 @@ export class HuntService {
       score,
       isGreatDeal,
       isPriority,
+      specialLabel: candidate.specialLabel,
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),

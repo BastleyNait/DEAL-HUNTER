@@ -148,6 +148,8 @@ export interface EvaluatedDeal {
   isGreatDeal: boolean;
   /** CPU de las que pediste ver primero (config.priorityCpus). */
   isPriority: boolean;
+  /** Etiqueta del modelo especial que matcheó, o null si no es oferta especial. */
+  specialLabel: string | null;
   // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
   // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
   // buena batería/specs y simplemente no lo puso en el texto.
@@ -247,6 +249,25 @@ export interface CpuPatternConfig {
   pattern: string;
   flags: string;
   tier: number;
+}
+
+/**
+ * Modelo "oferta especial": poco conocido, pero de lo mejor en su rango de
+ * precio según lo que ya se compró y se probó. Se avisa aunque no llegue al
+ * umbral de puntaje, y tiene vetas de búsqueda propias que corren siempre.
+ */
+export interface SpecialDealConfig {
+  /** Se muestra en el aviso y en el dashboard. */
+  label: string;
+  pattern: string;
+  flags: string;
+  /**
+   * Generación Intel que implica el modelo (Portégé serie J = 11.ª). Solo se
+   * usa cuando el título no trae un modelo de CPU reconocible ("i5 2.49GHz"):
+   * sin esto, esas publicaciones se descartaban antes de evaluarse. Null si
+   * el modelo no implica una generación.
+   */
+  impliedIntelGeneration: number | null;
 }
 
 export interface ExcludePatternConfig {
@@ -378,6 +399,15 @@ export interface SearchConfig {
    * Telegram, siempre que superen notifyScoreAbove. Son las etiquetas de cpuPatterns.
    */
   priorityCpus: string[];
+  /** Modelos "oferta especial" (ver SpecialDealConfig). */
+  specialDeals: SpecialDealConfig[];
+  /**
+   * Vetas que corren en TODAS las corridas, fuera de la ventana rotativa. Son
+   * para los modelos especiales: hay muy pocas publicaciones en todo eBay y
+   * se venden rápido, así que esperar a que les toque el turno en la rotación
+   * (cada ~1,5 h) es perderlas.
+   */
+  specialSearchProfiles: SearchProfile[];
   /**
    * Escalafón de modelos por facilidad de reventa. Gana el primero que matchea
    * el título, así que van de mejor a peor. No excluyen nada: pesan en el

@@ -10,13 +10,18 @@ export function escapeHtml(s: string): string {
 function formatMessage(deal: EvaluatedDeal): string {
   // Una subasta nunca se anuncia como ofertaza: el precio final es desconocido.
   // Y cuando se avisa es porque está por cerrar, así que eso encabeza.
+  // La especial le gana a "ofertaza" en compra directa: es un modelo que ya
+  // se probó y se sabe que rinde, no solo un buen puntaje. En subasta sigue
+  // mandando el cierre, con la marca de especial al lado.
   const header = deal.isAuction
-    ? "⏰ <b>Subasta por cerrar</b>"
-    : deal.isGreatDeal
-      ? "🚨 <b>OFERTAZA</b>"
-      : deal.isPriority
-        ? "⭐ <b>CPU prioritaria</b>"
-        : "🔥 <b>Oferta encontrada</b>";
+    ? `⏰ <b>Subasta por cerrar</b>${deal.specialLabel ? " · 💎 <b>OFERTA ESPECIAL</b>" : ""}`
+    : deal.specialLabel
+      ? "💎 <b>OFERTA ESPECIAL</b>"
+      : deal.isGreatDeal
+        ? "🚨 <b>OFERTAZA</b>"
+        : deal.isPriority
+          ? "⭐ <b>CPU prioritaria</b>"
+          : "🔥 <b>Oferta encontrada</b>";
   const auctionTag = deal.isAuction ? ` · ${timeLeft(deal.endDate)}` : "";
   const missing: string[] = [];
   if (!deal.hasDescription) missing.push("sin descripción");
@@ -29,6 +34,10 @@ function formatMessage(deal: EvaluatedDeal): string {
     `<b>${escapeHtml(deal.title)}</b>`,
     `💵 ${deal.price ?? "?"} ${deal.currency}${deal.isAuction ? " (precio actual, no final)" : ""}${deal.condition ? ` · ${escapeHtml(deal.condition)}` : ""}`,
   ];
+
+  if (deal.specialLabel) {
+    lines.push(`💎 ${escapeHtml(deal.specialLabel)}: poco conocida, de lo mejor en su rango de precio.`);
+  }
 
   if (missing.length > 0) {
     lines.push(`⚠️ ${missing.join(" · ")} — revisar la publicación antes de comprar`);
@@ -61,7 +70,9 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 
   for (const deal of shown) {
     const title = deal.title.length > 58 ? `${deal.title.slice(0, 57)}…` : deal.title;
-    const tags = [deal.cpuMatch, deal.isAuction ? "subasta" : null].filter(Boolean).join(" · ");
+    const tags = [deal.specialLabel ? "💎 especial" : null, deal.cpuMatch, deal.isAuction ? "subasta" : null]
+      .filter(Boolean)
+      .join(" · ");
     lines.push(
       `<b>$${deal.price ?? "?"}</b> · ${tags} · ${deal.score ?? "?"}/100`,
       `<a href="${deal.url}">${escapeHtml(title)}</a>`,

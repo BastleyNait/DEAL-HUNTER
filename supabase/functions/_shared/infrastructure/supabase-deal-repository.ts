@@ -73,7 +73,9 @@ export class SupabaseDealRepository implements DealRepository {
       .lte("price", options.maxPrice)
       // En la consulta y no después: el límite por corrida se aplica sobre lo
       // que ya pasó el umbral, no se gasta en subastas que no se iban a avisar.
-      .gt("score", options.scoreAbove)
+      // Las especiales pasan sin umbral de puntaje. PostgREST combina con AND
+      // este or() y el de vendedores excluidos de más abajo.
+      .or(`score.gt.${options.scoreAbove},special_label.not.is.null`)
       // Ya dentro de la ventana y todavía abierta.
       .lte("end_date", until)
       .gt("end_date", new Date(now).toISOString())
@@ -104,6 +106,7 @@ export class SupabaseDealRepository implements DealRepository {
       score: row.score === null ? null : Number(row.score),
       isGreatDeal: row.is_great_deal,
       isPriority: row.is_priority,
+      specialLabel: row.special_label ?? null,
       hasDescription: row.has_description,
       hasBatteryInfo: row.has_battery_info,
       batteryGrade: row.battery_grade,
@@ -207,6 +210,7 @@ export class SupabaseDealRepository implements DealRepository {
       score: deal.score,
       is_great_deal: deal.isGreatDeal,
       is_priority: deal.isPriority,
+      special_label: deal.specialLabel,
       has_description: deal.hasDescription,
       has_battery_info: deal.hasBatteryInfo,
       battery_grade: deal.batteryGrade,

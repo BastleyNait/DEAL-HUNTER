@@ -140,6 +140,38 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // avisos, siempre que superen notifyScoreAbove.
   priorityCpus: ["Intel i5 12th gen", "Intel i7 11th gen"],
   /**
+   * Ofertas especiales: la serie Portégé de Dynabook (ex-Toshiba). Poco
+   * conocida en Perú, pero de lo mejor que se probó en su rango de precio —
+   * dos de las compras reales fueron una X30W-J ($153.78) y una X30L-J
+   * ($165). X30L/X30W (13"), X40 (14") y X50 (15,6") son la misma línea de
+   * gama alta ultraliviana; J = Intel 11.ª gen, K = 12.ª gen.
+   *
+   * El patrón exige Dynabook/Portégé/Toshiba en el título para que un "X40"
+   * suelto de otra marca no entre por casualidad.
+   */
+  specialDeals: [
+    {
+      label: "Dynabook Portégé serie J",
+      pattern: "^(?=.*(?:dynabook|port[eé]g[eé]|toshiba)).*\\bx(?:30[lw]|40|50)[\\s-]?j\\b",
+      flags: "i",
+      impliedIntelGeneration: 11,
+    },
+    {
+      label: "Dynabook Portégé serie K",
+      pattern: "^(?=.*(?:dynabook|port[eé]g[eé]|toshiba)).*\\bx(?:30[lw]|40|50)[\\s-]?k\\b",
+      flags: "i",
+      impliedIntelGeneration: 12,
+    },
+  ],
+  // Medido contra la API real: "dynabook" trae ~70 publicaciones bajo $225 en
+  // todo eBay US (entran en una sola página) y cubre todas las Portégé J;
+  // "portege" suma las que se publican como Toshiba sin decir Dynabook. Dos
+  // llamadas por corrida, ~190 por día, sobre una cuota de 5.000.
+  specialSearchProfiles: [
+    { query: "dynabook", sort: "newlyListed", maxPages: 1 },
+    { query: "portege", sort: "newlyListed", maxPages: 1 },
+  ],
+  /**
    * Escalafón de reventa. Gana el primer patrón que matchea el título, así que
    * el orden importa: van de mejor a peor.
    *
