@@ -148,7 +148,7 @@ export interface EvaluatedDeal {
   isGreatDeal: boolean;
   /** CPU de las que pediste ver primero (config.priorityCpus). */
   isPriority: boolean;
-  /** Etiqueta del modelo especial que matcheó, o null si no es oferta especial. */
+  /** Etiqueta del tipo especial que matcheó ("2 en 1"), o null si no es ninguno. */
   specialLabel: string | null;
   // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
   // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
@@ -252,9 +252,10 @@ export interface CpuPatternConfig {
 }
 
 /**
- * Modelo "oferta especial": poco conocido, pero de lo mejor en su rango de
- * precio según lo que ya se compró y se probó. Se avisa aunque no llegue al
- * umbral de puntaje, y tiene vetas de búsqueda propias que corren siempre.
+ * Tipo de oferta con etiqueta propia (hoy: "2 en 1"). Se avisa aunque no
+ * llegue al umbral de puntaje —esas máquinas puntúan bajo por sus 8GB y por
+ * ser Latitude, no por ser malas— y tiene vetas de búsqueda propias que
+ * corren en todas las corridas.
  */
 export interface SpecialDealConfig {
   /** Se muestra en el aviso y en el dashboard. */
@@ -262,10 +263,11 @@ export interface SpecialDealConfig {
   pattern: string;
   flags: string;
   /**
-   * Generación Intel que implica el modelo (Portégé serie J = 11.ª). Solo se
+   * Generación Intel que implica el modelo (Portégé X30W-J = 11.ª). Solo se
    * usa cuando el título no trae un modelo de CPU reconocible ("i5 2.49GHz"):
    * sin esto, esas publicaciones se descartaban antes de evaluarse. Null si
-   * el modelo no implica una generación.
+   * el patrón no implica una generación (el caso de casi todos los 2 en 1:
+   * ahí manda el reconocimiento normal de CPU).
    */
   impliedIntelGeneration: number | null;
 }
@@ -399,13 +401,13 @@ export interface SearchConfig {
    * Telegram, siempre que superen notifyScoreAbove. Son las etiquetas de cpuPatterns.
    */
   priorityCpus: string[];
-  /** Modelos "oferta especial" (ver SpecialDealConfig). */
+  /** Tipos de oferta con etiqueta propia, hoy "2 en 1" (ver SpecialDealConfig). */
   specialDeals: SpecialDealConfig[];
   /**
    * Vetas que corren en TODAS las corridas, fuera de la ventana rotativa. Son
-   * para los modelos especiales: hay muy pocas publicaciones en todo eBay y
-   * se venden rápido, así que esperar a que les toque el turno en la rotación
-   * (cada ~1,5 h) es perderlas.
+   * para los tipos especiales: el pool rotativo tenía una sola búsqueda de
+   * 2 en 1, y esperar a que a cada una le toque el turno (cada ~1,5 h) es
+   * llegar tarde a lo que se vende rápido.
    */
   specialSearchProfiles: SearchProfile[];
   /**

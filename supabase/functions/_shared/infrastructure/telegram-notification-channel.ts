@@ -10,13 +10,14 @@ export function escapeHtml(s: string): string {
 function formatMessage(deal: EvaluatedDeal): string {
   // Una subasta nunca se anuncia como ofertaza: el precio final es desconocido.
   // Y cuando se avisa es porque está por cerrar, así que eso encabeza.
-  // La especial le gana a "ofertaza" en compra directa: es un modelo que ya
-  // se probó y se sabe que rinde, no solo un buen puntaje. En subasta sigue
-  // mandando el cierre, con la marca de especial al lado.
+  // El tipo especial le gana a "ofertaza" en compra directa: es la categoría
+  // que se está buscando a propósito, no solo un buen puntaje. En subasta
+  // sigue mandando el cierre, con la marca del tipo al lado.
+  const special = deal.specialLabel ? `🔄 <b>OFERTA ${escapeHtml(deal.specialLabel.toUpperCase())}</b>` : null;
   const header = deal.isAuction
-    ? `⏰ <b>Subasta por cerrar</b>${deal.specialLabel ? " · 💎 <b>OFERTA ESPECIAL</b>" : ""}`
-    : deal.specialLabel
-      ? "💎 <b>OFERTA ESPECIAL</b>"
+    ? `⏰ <b>Subasta por cerrar</b>${special ? ` · ${special}` : ""}`
+    : special
+      ? special
       : deal.isGreatDeal
         ? "🚨 <b>OFERTAZA</b>"
         : deal.isPriority
@@ -35,9 +36,6 @@ function formatMessage(deal: EvaluatedDeal): string {
     `💵 ${deal.price ?? "?"} ${deal.currency}${deal.isAuction ? " (precio actual, no final)" : ""}${deal.condition ? ` · ${escapeHtml(deal.condition)}` : ""}`,
   ];
 
-  if (deal.specialLabel) {
-    lines.push(`💎 ${escapeHtml(deal.specialLabel)}: poco conocida, de lo mejor en su rango de precio.`);
-  }
 
   if (missing.length > 0) {
     lines.push(`⚠️ ${missing.join(" · ")} — revisar la publicación antes de comprar`);
@@ -70,7 +68,7 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 
   for (const deal of shown) {
     const title = deal.title.length > 58 ? `${deal.title.slice(0, 57)}…` : deal.title;
-    const tags = [deal.specialLabel ? "💎 especial" : null, deal.cpuMatch, deal.isAuction ? "subasta" : null]
+    const tags = [deal.specialLabel ? `🔄 ${deal.specialLabel}` : null, deal.cpuMatch, deal.isAuction ? "subasta" : null]
       .filter(Boolean)
       .join(" · ");
     lines.push(

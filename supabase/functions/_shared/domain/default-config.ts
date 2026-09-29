@@ -140,36 +140,60 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // avisos, siempre que superen notifyScoreAbove.
   priorityCpus: ["Intel i5 12th gen", "Intel i7 11th gen"],
   /**
-   * Ofertas especiales: la serie Portégé de Dynabook (ex-Toshiba). Poco
-   * conocida en Perú, pero de lo mejor que se probó en su rango de precio —
-   * dos de las compras reales fueron una X30W-J ($153.78) y una X30L-J
-   * ($165). X30L/X30W (13"), X40 (14") y X50 (15,6") son la misma línea de
-   * gama alta ultraliviana; J = Intel 11.ª gen, K = 12.ª gen.
+   * Tipo de oferta "2 en 1": laptops convertibles (la pantalla gira 360° o se
+   * separa y funcionan como tablet) que además cumplen todo lo demás — precio,
+   * CPU, vendedor, sin defectos declarados. Antes este tipo era la serie
+   * Portégé de Dynabook; pasó a ser el formato de la máquina, no el modelo.
    *
-   * El patrón exige Dynabook/Portégé/Toshiba en el título para que un "X40"
-   * suelto de otra marca no entre por casualidad.
+   * Se reconoce por el título. Los datos estructurados de eBay no sirven acá:
+   * "Form Factor" casi nunca viene, y cuando viene dice "Laptop".
+   *
+   * Cuidados del patrón, medidos contra ~19 títulos dudosos reales:
+   *  - "Yoga Slim" y "Yoga Pro" NO son 2 en 1 (son clamshell de la línea
+   *    Yoga), por eso el lookahead. "Yoga" a secas, "Yoga 7i", "Yoga 9" sí.
+   *  - Un táctil a secas ("Touchscreen") tampoco alcanza: hay muchas laptops
+   *    táctiles con bisagra normal.
+   *  - IdeaPad/Galaxy Book "Flex", ZenBook "Flip", "Spin" de Acer y Dell
+   *    "2n1" son convertibles aunque no digan "2 en 1".
+   *
+   * La Portégé X30W-J/K va aparte porque es la única que entra por modelo: la
+   * W es la variante convertible, y sus títulos ("X30W-J ... i5 2.49GHz")
+   * casi nunca dicen "2-in-1" ni traen el modelo de CPU, así que se deduce la
+   * generación de la serie (J = 11.ª, K = 12.ª). Va primero: el primer patrón
+   * que matchea manda, y solo este trae impliedIntelGeneration.
    */
   specialDeals: [
     {
-      label: "Dynabook Portégé serie J",
-      pattern: "^(?=.*(?:dynabook|port[eé]g[eé]|toshiba)).*\\bx(?:30[lw]|40|50)[\\s-]?j\\b",
+      label: "2 en 1",
+      pattern: "^(?=.*(?:dynabook|port[eé]g[eé]|toshiba)).*\\bx30w[\\s-]?j\\b",
       flags: "i",
       impliedIntelGeneration: 11,
     },
     {
-      label: "Dynabook Portégé serie K",
-      pattern: "^(?=.*(?:dynabook|port[eé]g[eé]|toshiba)).*\\bx(?:30[lw]|40|50)[\\s-]?k\\b",
+      label: "2 en 1",
+      pattern: "^(?=.*(?:dynabook|port[eé]g[eé]|toshiba)).*\\bx30w[\\s-]?k\\b",
       flags: "i",
       impliedIntelGeneration: 12,
     },
+    {
+      label: "2 en 1",
+      pattern:
+        "\\b(?:2[\\s-]?in[\\s-]?1|2n1|two[\\s-]?in[\\s-]?one|convertible|x360|flip|spin\\s?\\d{1,2}|flex\\s?\\d{1,2})\\b|\\byoga(?!\\s?(?:slim|pro))|360\\s?(?:°|º|deg)",
+      flags: "i",
+      impliedIntelGeneration: null,
+    },
   ],
-  // Medido contra la API real: "dynabook" trae ~70 publicaciones bajo $225 en
-  // todo eBay US (entran en una sola página) y cubre todas las Portégé J;
-  // "portege" suma las que se publican como Toshiba sin decir Dynabook. Dos
-  // llamadas por corrida, ~190 por día, sobre una cuota de 5.000.
+  // Elegidas por cobertura contra la API real (16 búsquedas candidatas, 107
+  // 2 en 1 distintos con CPU reconocible bajo $225): x360 sola cubre el 32 %,
+  // y con 2n1, yoga y 2-in-1 se llega a ~75 %; cada búsqueda extra suma menos.
+  // Ordenadas por publicación reciente, que es lo que importa cada 15
+  // minutos: una nueva cae entre las 100 primeras de su búsqueda. Cuatro
+  // llamadas por corrida, ~384 por día, sobre una cuota de 5.000.
   specialSearchProfiles: [
-    { query: "dynabook", sort: "newlyListed", maxPages: 1 },
-    { query: "portege", sort: "newlyListed", maxPages: 1 },
+    { query: "x360", sort: "newlyListed", maxPages: 1 },
+    { query: "2n1", sort: "newlyListed", maxPages: 1 },
+    { query: "yoga", sort: "newlyListed", maxPages: 1 },
+    { query: "2-in-1", sort: "newlyListed", maxPages: 1 },
   ],
   /**
    * Escalafón de reventa. Gana el primer patrón que matchea el título, así que

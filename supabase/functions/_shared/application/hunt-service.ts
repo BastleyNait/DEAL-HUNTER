@@ -61,7 +61,7 @@ function promiseOf(candidate: Candidate, config: SearchConfig): number {
   let promise = candidate.cpuTier * 10;
 
   // Una especial nunca puede quedar afuera por el tope de candidatos por
-  // corrida: son pocas en todo eBay y es justo lo que se está buscando.
+  // corrida: es justo lo que se está buscando (llegan ~10 por día).
   if (candidate.specialLabel) promise += 1000;
 
   if (config.priorityCpus.includes(candidate.cpuLabel)) promise += 40;
@@ -435,8 +435,9 @@ export class HuntService {
   private async notifyQualified(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
     // Primero el umbral de puntaje: lo que no lo supera no se avisa de ninguna
     // forma, ni suelto ni en el resumen. Las CPUs prioritarias no tienen
-    // excepción. Las ofertas especiales sí: el puntaje castiga los 8GB, pero
-    // una de las compras reales de este modelo fue justamente de 8GB.
+    // excepción. Las especiales (2 en 1) sí: con el umbral casi ninguna
+    // avisaría — 58 de las 59 de compra directa disponibles al medir puntúan
+    // 70 o menos, por los 8GB y por ser Latitude.
     const aboveThreshold = deals.filter((d) => d.specialLabel || (d.score ?? 0) > config.notifyScoreAbove);
     if (aboveThreshold.length === 0) return;
 
