@@ -156,6 +156,24 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    *  - IdeaPad/Galaxy Book "Flex", ZenBook "Flip", "Spin" de Acer y Dell
    *    "2n1" son convertibles aunque no digan "2 en 1".
    *
+   * Modelos que son 2 en 1 aunque el vendedor no lo diga (buscados en la web y
+   * medidos contra ~9.000 publicaciones guardadas; los demás ya dicen "x360",
+   * "Yoga", "Flex" o "2-in-1" en el nombre, así que ya entraban):
+   *  - HP Elite Dragonfly (G1-G3 y Max): 23 publicaciones se escapaban.
+   *  - "Detachable" (Latitude 7320 Detachable, ThinkPad X12 Detachable).
+   *  - Surface Book y Laptop Studio. Surface Pro NO: es una tablet, y muchas
+   *    se venden sin teclado.
+   *  - Códigos de Asus Flip (UX360/370/461/462/463/561/562/563, TP4xx/TM420),
+   *    Lenovo IdeaPad C340, Dell XPS 13 9365, Fujitsu Lifebook U9xx,
+   *    Dynabook X20W.
+   *  - Se excluyen Chromebook (el Dragonfly Chromebook es ChromeOS) y las
+   *    tablets "tablet only" o "no keyboard".
+   *
+   * Lo que NO se puede resolver por título: Latitude 5310/5320/7320/7410/
+   * 7420/9420 y similares existen en las dos versiones, y de 1.127 títulos
+   * medidos solo 1 decía 2 en 1 en la descripción. Sin la palabra no se
+   * distinguen de la versión normal (la mayoría), así que no se marcan.
+   *
    * La Portégé X30W-J/K va aparte porque es la única que entra por modelo: la
    * W es la variante convertible, y sus títulos ("X30W-J ... i5 2.49GHz")
    * casi nunca dicen "2-in-1" ni traen el modelo de CPU, así que se deduce la
@@ -178,9 +196,10 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     {
       label: "2 en 1",
       pattern:
-        "\\b(?:2[\\s-]?in[\\s-]?1|2n1|two[\\s-]?in[\\s-]?one|convertible|x360|flip|spin\\s?\\d{1,2}|flex\\s?\\d{1,2})\\b|\\byoga(?!\\s?(?:slim|pro))|360\\s?(?:°|º|deg)",
+        "\\b(?:2[\\s-]?in[\\s-]?1|2n1|two[\\s-]?in[\\s-]?one|convertible|x360|flip|spin\\s?\\d{1,2}|flex\\s?\\d{1,2}|detachable|dragonfly|surface\\s?book|laptop\\s?studio|c340|xps\\s?13\\s?9365|x20w)\\b|\\byoga(?!\\s?(?:slim|pro))|360\\s?(?:°|º|deg)|\\bux(?:360|370|461|462|463|561|562|563)\\w*|\\bt[pm]4\\d{2}\\w*|\\blifebook\\s?u9\\w*",
       flags: "i",
       impliedIntelGeneration: null,
+      excludePattern: "chrome\\s?(?:os|book)|tablet\\s?only|no\\s?keyboard",
     },
   ],
   // Elegidas por cobertura contra la API real (16 búsquedas candidatas, 107
@@ -189,11 +208,23 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // Ordenadas por publicación reciente, que es lo que importa cada 15
   // minutos: una nueva cae entre las 100 primeras de su búsqueda. Cuatro
   // llamadas por corrida, ~384 por día, sobre una cuota de 5.000.
+  //
+  // La quinta junta los modelos de poco volumen que no dicen "2 en 1": eBay
+  // acepta varios términos entre paréntesis (OR), así que son ~10 modelos en
+  // UNA llamada. Da 273 resultados (más de una página), pero ordenada por
+  // reciente una publicación nueva siempre cae entre las 100 primeras. Surface
+  // Book va como "surface book 3" porque "surface book" a secas trae 483
+  // resultados, casi todo repuestos, y taparía al resto. +96 llamadas por día.
   specialSearchProfiles: [
     { query: "x360", sort: "newlyListed", maxPages: 1 },
     { query: "2n1", sort: "newlyListed", maxPages: 1 },
     { query: "yoga", sort: "newlyListed", maxPages: 1 },
     { query: "2-in-1", sort: "newlyListed", maxPages: 1 },
+    {
+      query: '(dragonfly, detachable, "laptop studio", "zenbook flip", "vivobook flip", c340, "lifebook u9", "xps 9365", x20w, "surface book 3")',
+      sort: "newlyListed",
+      maxPages: 1,
+    },
   ],
   /**
    * Escalafón de reventa. Gana el primer patrón que matchea el título, así que

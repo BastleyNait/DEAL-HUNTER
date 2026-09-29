@@ -19,11 +19,15 @@ const INTEL_FAMILY_RE = /\b(?:core\s*)?i([57])\b/i;
 const INTEL_I3_RE = /\b(?:core\s*)?i3\b/i;
 
 export function createSpecialDealMatcher(config: SearchConfig): SpecialDealMatcher {
-  const compiled = config.specialDeals.map((special) => ({ special, regex: new RegExp(special.pattern, special.flags) }));
+  const compiled = config.specialDeals.map((special) => ({
+    special,
+    regex: new RegExp(special.pattern, special.flags),
+    exclude: special.excludePattern ? new RegExp(special.excludePattern, special.flags) : null,
+  }));
 
   return {
     match(title: string) {
-      return compiled.find((c) => c.regex.test(title))?.special ?? null;
+      return compiled.find((c) => c.regex.test(title) && !c.exclude?.test(title))?.special ?? null;
     },
 
     inferCpu(title: string, special: SpecialDealConfig) {

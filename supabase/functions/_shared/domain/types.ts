@@ -270,6 +270,12 @@ export interface SpecialDealConfig {
    * ahí manda el reconocimiento normal de CPU).
    */
   impliedIntelGeneration: number | null;
+  /**
+   * Si el título matchea esto, NO es de este tipo aunque matchee `pattern`.
+   * Para lo que comparte nombre con un convertible pero no sirve como tal:
+   * los Chromebook (ChromeOS) y las tablets vendidas sin teclado.
+   */
+  excludePattern?: string | null;
 }
 
 export interface ExcludePatternConfig {
