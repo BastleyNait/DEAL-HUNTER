@@ -13,7 +13,12 @@ function formatMessage(deal: EvaluatedDeal): string {
   // El tipo especial le gana a "ofertaza" en compra directa: es la categoría
   // que se está buscando a propósito, no solo un buen puntaje. En subasta
   // sigue mandando el cierre, con la marca del tipo al lado.
-  const special = deal.specialLabel ? `🔄 <b>OFERTA ${escapeHtml(deal.specialLabel.toUpperCase())}</b>` : null;
+  // Una Dell 2 en 1 que igual llegó al aviso (por puntaje) no se anuncia como
+  // oferta especial: es una oferta normal.
+  const special =
+    deal.specialLabel && !deal.specialDemoted
+      ? `🔄 <b>OFERTA ${escapeHtml(deal.specialLabel.toUpperCase())}</b>`
+      : null;
   const header = deal.isAuction
     ? `⏰ <b>Subasta por cerrar</b>${special ? ` · ${special}` : ""}`
     : special
@@ -68,7 +73,7 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 
   for (const deal of shown) {
     const title = deal.title.length > 58 ? `${deal.title.slice(0, 57)}…` : deal.title;
-    const tags = [deal.specialLabel ? `🔄 ${deal.specialLabel}` : null, deal.cpuMatch, deal.isAuction ? "subasta" : null]
+    const tags = [deal.specialLabel && !deal.specialDemoted ? `🔄 ${deal.specialLabel}` : null, deal.cpuMatch, deal.isAuction ? "subasta" : null]
       .filter(Boolean)
       .join(" · ");
     lines.push(

@@ -75,7 +75,8 @@ export class SupabaseDealRepository implements DealRepository {
       // que ya pasó el umbral, no se gasta en subastas que no se iban a avisar.
       // Las especiales pasan sin umbral de puntaje. PostgREST combina con AND
       // este or() y el de vendedores excluidos de más abajo.
-      .or(`score.gt.${options.scoreAbove},special_label.not.is.null`)
+      // Las de prioridad baja (Dell) no se saltan el umbral.
+      .or(`score.gt.${options.scoreAbove},and(special_label.not.is.null,special_demoted.eq.false)`)
       // Ya dentro de la ventana y todavía abierta.
       .lte("end_date", until)
       .gt("end_date", new Date(now).toISOString())
@@ -107,6 +108,7 @@ export class SupabaseDealRepository implements DealRepository {
       isGreatDeal: row.is_great_deal,
       isPriority: row.is_priority,
       specialLabel: row.special_label ?? null,
+      specialDemoted: row.special_demoted ?? false,
       hasDescription: row.has_description,
       hasBatteryInfo: row.has_battery_info,
       batteryGrade: row.battery_grade,
@@ -211,6 +213,7 @@ export class SupabaseDealRepository implements DealRepository {
       is_great_deal: deal.isGreatDeal,
       is_priority: deal.isPriority,
       special_label: deal.specialLabel,
+      special_demoted: deal.specialDemoted,
       has_description: deal.hasDescription,
       has_battery_info: deal.hasBatteryInfo,
       battery_grade: deal.batteryGrade,

@@ -3,6 +3,8 @@ import type { CpuMatch, SearchConfig, SpecialDealConfig } from "./types.ts";
 export interface SpecialDealMatcher {
   /** El modelo especial que matchea el título, o null. */
   match(title: string): SpecialDealConfig | null;
+  /** true si ese título es del tipo especial pero de prioridad baja (las Dell). */
+  isDemoted(title: string, special: SpecialDealConfig): boolean;
   /**
    * CPU deducida del modelo, para cuando el título no trae un modelo de
    * procesador reconocible. Una compra real de $153.78 ("Portege X30W-J ...
@@ -23,11 +25,16 @@ export function createSpecialDealMatcher(config: SearchConfig): SpecialDealMatch
     special,
     regex: new RegExp(special.pattern, special.flags),
     exclude: special.excludePattern ? new RegExp(special.excludePattern, special.flags) : null,
+    demote: special.demotePattern ? new RegExp(special.demotePattern, special.flags) : null,
   }));
 
   return {
     match(title: string) {
       return compiled.find((c) => c.regex.test(title) && !c.exclude?.test(title))?.special ?? null;
+    },
+
+    isDemoted(title: string, special: SpecialDealConfig) {
+      return compiled.find((c) => c.special === special)?.demote?.test(title) ?? false;
     },
 
     inferCpu(title: string, special: SpecialDealConfig) {

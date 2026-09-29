@@ -150,6 +150,8 @@ export interface EvaluatedDeal {
   isPriority: boolean;
   /** Etiqueta del tipo especial que matcheó ("2 en 1"), o null si no es ninguno. */
   specialLabel: string | null;
+  /** true si el tipo especial matcheó pero con prioridad baja (ver demotePattern). */
+  specialDemoted: boolean;
   // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
   // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
   // buena batería/specs y simplemente no lo puso en el texto.
@@ -276,6 +278,14 @@ export interface SpecialDealConfig {
    * los Chromebook (ChromeOS) y las tablets vendidas sin teclado.
    */
   excludePattern?: string | null;
+  /**
+   * Si el título matchea esto, sigue siendo de este tipo (se marca y se ve en
+   * su pestaña) pero con prioridad baja: no se salta el umbral de puntaje del
+   * aviso, no encabeza el orden y no se anuncia como oferta especial. Para lo
+   * que se ve bien en el papel pero llega maltratado: las Dell, que suelen
+   * venir rayadas o rotas.
+   */
+  demotePattern?: string | null;
 }
 
 export interface ExcludePatternConfig {

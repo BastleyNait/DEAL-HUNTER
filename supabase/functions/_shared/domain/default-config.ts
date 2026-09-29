@@ -200,6 +200,10 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       flags: "i",
       impliedIntelGeneration: null,
       excludePattern: "chrome\\s?(?:os|book)|tablet\\s?only|no\\s?keyboard",
+      // Las Dell 2 en 1 (Latitude, Inspiron, XPS) siguen marcadas pero con
+      // prioridad baja: llegan seguido rayadas o rotas, igual que la Latitude
+      // ya pesa menos en el escalafón y resta 10 puntos. La misma decisión.
+      demotePattern: "\\b(?:dell|latitude|inspiron|xps)\\b",
     },
   ],
   // Elegidas por cobertura contra la API real (16 búsquedas candidatas, 107

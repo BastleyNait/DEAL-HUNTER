@@ -29,6 +29,7 @@ interface Candidate {
   cpuLabel: string;
   cpuTier: number;
   specialLabel: string | null;
+  specialDemoted: boolean;
 }
 
 /**
@@ -62,7 +63,7 @@ function promiseOf(candidate: Candidate, config: SearchConfig): number {
 
   // Una especial nunca puede quedar afuera por el tope de candidatos por
   // corrida: es justo lo que se está buscando (llegan ~10 por día).
-  if (candidate.specialLabel) promise += 1000;
+  if (candidate.specialLabel && !candidate.specialDemoted) promise += 1000;
 
   if (config.priorityCpus.includes(candidate.cpuLabel)) promise += 40;
   if (extractRamGb(title) >= 16) promise += 35;
@@ -82,7 +83,9 @@ function promiseOf(candidate: Candidate, config: SearchConfig): number {
  * después las CPUs prioritarias, y dentro de cada grupo por puntaje.
  */
 function betterFirst(a: EvaluatedDeal, b: EvaluatedDeal): number {
-  if (Boolean(a.specialLabel) !== Boolean(b.specialLabel)) return a.specialLabel ? -1 : 1;
+  const aTop = Boolean(a.specialLabel) && !a.specialDemoted;
+  const bTop = Boolean(b.specialLabel) && !b.specialDemoted;
+  if (aTop !== bTop) return aTop ? -1 : 1;
   if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
   return (b.score ?? 0) - (a.score ?? 0);
 }
@@ -150,6 +153,7 @@ export class HuntService {
               cpuLabel: cpu.label,
               cpuTier: cpu.tier,
               specialLabel: special?.label ?? null,
+              specialDemoted: special ? specialMatcher.isDemoted(item.title, special) : false,
             });
           }
         }
@@ -438,7 +442,9 @@ export class HuntService {
     // excepción. Las especiales (2 en 1) sí: con el umbral casi ninguna
     // avisaría — 58 de las 59 de compra directa disponibles al medir puntúan
     // 70 o menos, por los 8GB y por ser Latitude.
-    const aboveThreshold = deals.filter((d) => d.specialLabel || (d.score ?? 0) > config.notifyScoreAbove);
+    const aboveThreshold = deals.filter(
+      (d) => (d.specialLabel && !d.specialDemoted) || (d.score ?? 0) > config.notifyScoreAbove,
+    );
     if (aboveThreshold.length === 0) return;
 
     // Después lo ya visto: no tiene sentido gastar el cupo de avisos de la
@@ -509,6 +515,7 @@ export class HuntService {
       isGreatDeal,
       isPriority,
       specialLabel: candidate.specialLabel,
+      specialDemoted: candidate.specialDemoted,
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),
