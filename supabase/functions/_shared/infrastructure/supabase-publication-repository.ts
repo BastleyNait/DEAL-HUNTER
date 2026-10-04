@@ -25,6 +25,20 @@ export class SupabasePublicationRepository implements PublicationRepository {
     );
   }
 
+  async queueForFacebook(itemIds?: string[]): Promise<number> {
+    // Sin ids: solo las fallidas (el "reintentar todo"). Con ids: las que no
+    // estén ya en cola o posteadas, para que un doble click no duplique.
+    let query = this.supabase
+      .from("publications")
+      .update({ facebook_status: "queued", facebook_error: null })
+      .in("facebook_status", itemIds && itemIds.length > 0 ? ["none", "failed", "skipped"] : ["failed"]);
+    if (itemIds && itemIds.length > 0) query = query.in("item_id", itemIds);
+
+    const { data, error } = await query.select("item_id");
+    if (error) throw new Error(`No se pudo encolar para Facebook: ${error.message}`);
+    return data?.length ?? 0;
+  }
+
   async save(record: {
     itemId: string;
     ebayUrl: string;

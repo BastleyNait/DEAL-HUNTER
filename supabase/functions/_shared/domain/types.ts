@@ -515,6 +515,14 @@ export interface PublicationStatus {
 /** Puerto: persistencia de publicaciones ya hechas (evita publicar dos veces, alimenta la cola de Facebook). */
 export interface PublicationRepository {
   findStatuses(itemIds: string[]): Promise<Map<string, PublicationStatus>>;
+  /**
+   * Pone en cola para Facebook publicaciones ya hechas en la tienda: las que
+   * no se encolaron al publicar, las que fallaron y las que se saltearon.
+   * Sin ids, reintenta todas las fallidas. Devuelve cuántas pasaron a la cola.
+   * Nunca toca una que ya está en cola o ya se posteó: encolar dos veces la
+   * misma publicaría duplicado en Marketplace.
+   */
+  queueForFacebook(itemIds?: string[]): Promise<number>;
   save(record: {
     itemId: string;
     ebayUrl: string;

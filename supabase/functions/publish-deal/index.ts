@@ -37,6 +37,9 @@ const NULL_PUBLICATION_REPOSITORY: PublicationRepository = {
   save() {
     throw new Error("PublicationRepository no disponible en modo resolve.");
   },
+  queueForFacebook() {
+    throw new Error("PublicationRepository no disponible en modo resolve.");
+  },
 };
 
 // Composition root: arma eBay + Supabase + REVOLT-LAP y los inyecta en
@@ -70,6 +73,19 @@ Deno.serve(async (req) => {
     );
     try {
       return json({ data: await service.resolve(String(body.url ?? "")) });
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  }
+
+  // Encolar para Facebook solo toca la tabla publications: no necesita
+  // eBay ni las credenciales de la tienda, así que tampoco se las exige.
+  if (body.action === "facebook-queue") {
+    try {
+      const ids = Array.isArray(body.itemIds) ? body.itemIds.map(String) : undefined;
+      const queued = await new SupabasePublicationRepository(supabase).queueForFacebook(ids);
+      return json({ data: { queued } });
     } catch (err) {
       console.error(err);
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);
