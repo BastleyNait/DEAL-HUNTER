@@ -106,7 +106,8 @@ function buildFilter(config: SearchConfig): string {
   // El techo de precio va hasta refurbishedExceptionMaxPrice (>= maxPriceUsd)
   // para que eBay nos devuelva también los reacondicionados con Best Offer que
   // se evalúan en priceEligibilityRule; el resto de los casos se filtran ahí.
-  const priceCeiling = Math.max(config.maxPriceUsd, config.refurbishedExceptionMaxPrice);
+  // También hasta el tope de OFERTA URGENTE, que puede ser mayor que ambos.
+  const priceCeiling = Math.max(config.maxPriceUsd, config.refurbishedExceptionMaxPrice, config.urgentDeal.maxPriceUsd);
   const parts = [
     `price:[..${priceCeiling}]`,
     `priceCurrency:USD`,

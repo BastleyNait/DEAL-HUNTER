@@ -7,7 +7,7 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function formatMessage(deal: EvaluatedDeal): string {
+export function formatMessage(deal: EvaluatedDeal): string {
   // Una subasta nunca se anuncia como ofertaza: el precio final es desconocido.
   // Y cuando se avisa es porque está por cerrar, así que eso encabeza.
   // El tipo especial le gana a "ofertaza" en compra directa: es la categoría
@@ -19,7 +19,11 @@ function formatMessage(deal: EvaluatedDeal): string {
     deal.specialLabel && !deal.specialDemoted
       ? `🔄 <b>OFERTA ${escapeHtml(deal.specialLabel.toUpperCase())}</b>`
       : null;
-  const header = deal.isAuction
+  // OFERTA URGENTE le gana a todo lo demás: es la combinación que se compra
+  // sin pensarlo. Si además es 2 en 1, se dice al lado.
+  const header = deal.isUrgent
+    ? `💰 <b>OFERTA URGENTE</b> 💰${special ? ` · ${special}` : ""}`
+    : deal.isAuction
     ? `⏰ <b>Subasta por cerrar</b>${special ? ` · ${special}` : ""}`
     : special
       ? special
@@ -73,7 +77,12 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 
   for (const deal of shown) {
     const title = deal.title.length > 58 ? `${deal.title.slice(0, 57)}…` : deal.title;
-    const tags = [deal.specialLabel && !deal.specialDemoted ? `🔄 ${deal.specialLabel}` : null, deal.cpuMatch, deal.isAuction ? "subasta" : null]
+    const tags = [
+      deal.isUrgent ? "💰 URGENTE" : null,
+      deal.specialLabel && !deal.specialDemoted ? `🔄 ${deal.specialLabel}` : null,
+      deal.cpuMatch,
+      deal.isAuction ? "subasta" : null,
+    ]
       .filter(Boolean)
       .join(" · ");
     lines.push(

@@ -13,6 +13,7 @@ import type {
 } from "../domain/types.ts";
 import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
 import { createSpecialDealMatcher } from "../domain/special-deals.ts";
+import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgent-deals.ts";
 import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
@@ -57,9 +58,13 @@ export function selectProfiles(config: SearchConfig, rotationSeed: number): Sear
  * Es un reflejo del scoring real (CPU prioritaria, 16GB, línea que se revende
  * bien, y el precio como desempate), no un criterio aparte.
  */
-function promiseOf(candidate: Candidate, config: SearchConfig): number {
+function promiseOf(candidate: Candidate, config: SearchConfig, urgentMatcher: UrgentDealMatcher): number {
   const title = candidate.summary.title;
   let promise = candidate.cpuTier * 10;
+
+  // Una posible OFERTA URGENTE tampoco puede quedar afuera por el tope de
+  // candidatos: es lo que más importa, y las de $200-250 solo existen por ella.
+  if (urgentMatcher.isUrgent(asPreScreenListing(candidate.summary), { lenient: true })) promise += 2000;
 
   // Una especial nunca puede quedar afuera por el tope de candidatos por
   // corrida: es justo lo que se está buscando (llegan ~10 por día).
@@ -78,11 +83,24 @@ function promiseOf(candidate: Candidate, config: SearchConfig): number {
   return promise;
 }
 
+/** Lo que se sabe de un resultado de búsqueda antes de pedir su detalle (título y resumen). */
+function asPreScreenListing(summary: ListingSummary): ListingDetail {
+  return {
+    ...summary,
+    descriptionText: summary.shortDescription,
+    sellerDescription: "",
+    sellerDescriptionHtml: "",
+    aspects: [],
+    additionalImages: [],
+  };
+}
+
 /**
- * Orden en que vale la pena interrumpir: primero las ofertas especiales,
- * después las CPUs prioritarias, y dentro de cada grupo por puntaje.
+ * Orden en que vale la pena interrumpir: primero las OFERTAS URGENTES, después
+ * las especiales, las CPUs prioritarias, y dentro de cada grupo por puntaje.
  */
 function betterFirst(a: EvaluatedDeal, b: EvaluatedDeal): number {
+  if (a.isUrgent !== b.isUrgent) return a.isUrgent ? -1 : 1;
   const aTop = Boolean(a.specialLabel) && !a.specialDemoted;
   const bTop = Boolean(b.specialLabel) && !b.specialDemoted;
   if (aTop !== bTop) return aTop ? -1 : 1;
@@ -111,7 +129,11 @@ export class HuntService {
     const config = await this.configProvider.getConfig();
     const cpuMatcher = createCpuMatcher(config);
     const specialMatcher = createSpecialDealMatcher(config);
+    const urgentMatcher = createUrgentDealMatcher(config);
+    // Dos juegos de reglas: el pre-descarte solo ve título y resumen, y ahí lo
+    // que falta saber de una posible OFERTA URGENTE (RAM, disco) no descarta.
     const exclusionRules = createExclusionRules(config);
+    const preScreenRules = createExclusionRules(config, true);
     const scoringStrategy = this.buildScoringStrategy(config);
     const maxTier = maxCpuTier(config);
 
@@ -177,7 +199,7 @@ export class HuntService {
       // scoring viejo ("más barato = mejor") pero contradice el actual: dejaba
       // el presupuesto en la punta barata y nunca llegaba a las máquinas que
       // realmente se compran.
-      .sort((a, b) => promiseOf(b, config) - promiseOf(a, config));
+      .sort((a, b) => promiseOf(b, config, urgentMatcher) - promiseOf(a, config, urgentMatcher));
 
     // 3. Colapsar republicaciones del mismo equipo (mismo título normalizado y
     //    precio), tanto dentro de esta corrida como contra lo ya guardado.
@@ -199,14 +221,7 @@ export class HuntService {
       if (knownFingerprints.has(fingerprint) || seenThisRun.has(fingerprint)) {
         stats.duplicatesSkipped++;
         // Se guarda como descartado para que no vuelva a evaluarse en cada corrida.
-        const asListing: ListingDetail = {
-          ...candidate.summary,
-          descriptionText: candidate.summary.shortDescription,
-          sellerDescription: "",
-          sellerDescriptionHtml: "",
-          aspects: [],
-          additionalImages: [],
-        };
+        const asListing = asPreScreenListing(candidate.summary);
         try {
           await this.dealRepository.save(
             this.toEvaluatedDeal(candidate, asListing, false, "duplicate_listing", null, false),
@@ -229,15 +244,8 @@ export class HuntService {
       try {
         // 3. Pre-descarte gratis: si con título + shortDescription ya sabemos que
         //    no sirve, lo guardamos como rechazado sin gastar la llamada de detalle.
-        const preScreen: ListingDetail = {
-          ...candidate.summary,
-          descriptionText: candidate.summary.shortDescription,
-          sellerDescription: "",
-          sellerDescriptionHtml: "",
-          aspects: [],
-          additionalImages: [],
-        };
-        const preScreenResult = evaluateExclusions(exclusionRules, preScreen);
+        const preScreen = asPreScreenListing(candidate.summary);
+        const preScreenResult = evaluateExclusions(preScreenRules, preScreen);
         if (!preScreenResult.qualifies) {
           await this.dealRepository.save(
             this.toEvaluatedDeal(candidate, preScreen, false, preScreenResult.reason, null, false),
@@ -269,6 +277,8 @@ export class HuntService {
           score,
           isGreatDeal,
           config.priorityCpus.includes(candidate.cpuLabel),
+          // Con el detalle completo: la RAM, el disco y los problemas ya se leen de verdad.
+          qualifies && urgentMatcher.isUrgent(detail),
         );
         await this.dealRepository.save(evaluatedDeal);
 
@@ -498,6 +508,7 @@ export class HuntService {
     score: number | null,
     isGreatDeal: boolean,
     isPriority = false,
+    isUrgent = false,
   ) {
     const text = `${listing.title} ${listing.descriptionText}`;
     return {
@@ -516,6 +527,7 @@ export class HuntService {
       isPriority,
       specialLabel: candidate.specialLabel,
       specialDemoted: candidate.specialDemoted,
+      isUrgent,
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),

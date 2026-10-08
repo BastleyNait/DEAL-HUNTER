@@ -5,6 +5,7 @@ import {
   extractStorageGb,
   mentionsNoStorage,
 } from "../domain/hardware-signals.ts";
+import { createUrgentDealMatcher } from "../domain/urgent-deals.ts";
 
 /**
  * Una regla por cada `excludePatterns` del config (data-driven: agregar una
@@ -130,15 +131,23 @@ function batteryThresholdRule(config: SearchConfig): ExclusionRule {
  * tiene "Best Offer" habilitado, y el precio de lista no pasa
  * refurbishedExceptionMaxPrice, se deja pasar (la idea es negociar el precio
  * final por debajo de maxPriceUsd antes de comprar).
+ *
+ * La otra excepción es la OFERTA URGENTE: la combinación ideal (RAM, disco,
+ * CPU, sin problemas) puede llegar hasta urgentDeal.maxPriceUsd aunque pase
+ * del presupuesto general. `lenientUrgent` es para el pre-descarte, que no
+ * tiene la descripción completa (ver UrgentDealMatcher).
  */
-function priceEligibilityRule(config: SearchConfig): ExclusionRule {
+function priceEligibilityRule(config: SearchConfig, lenientUrgent: boolean): ExclusionRule {
   const refurbishedIds = new Set(config.refurbishedConditionIds.map(String));
+  const urgentMatcher = createUrgentDealMatcher(config);
   return {
     id: "price_over_budget",
     evaluate(listing: ListingDetail) {
       if (listing.price == null || listing.price <= config.maxPriceUsd) {
         return { excluded: false };
       }
+
+      if (urgentMatcher.isUrgent(listing, { lenient: lenientUrgent })) return { excluded: false };
 
       const isRefurbished = listing.conditionId != null && refurbishedIds.has(listing.conditionId);
       const hasBestOffer = listing.buyingOptions.includes("BEST_OFFER");
@@ -151,7 +160,11 @@ function priceEligibilityRule(config: SearchConfig): ExclusionRule {
   };
 }
 
-export function createExclusionRules(config: SearchConfig): ExclusionRule[] {
+/**
+ * `lenientUrgent` en true es el juego de reglas del pre-descarte (solo título
+ * y resumen); en false, el definitivo con el detalle completo.
+ */
+export function createExclusionRules(config: SearchConfig, lenientUrgent = false): ExclusionRule[] {
   return [
     ...patternRules(config),
     ...titlePatternRules(config),
@@ -160,7 +173,7 @@ export function createExclusionRules(config: SearchConfig): ExclusionRule[] {
     implausiblePriceRule(config),
     missingStorageRule(),
     batteryThresholdRule(config),
-    priceEligibilityRule(config),
+    priceEligibilityRule(config, lenientUrgent),
   ];
 }
 

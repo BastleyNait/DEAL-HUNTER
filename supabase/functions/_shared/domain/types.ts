@@ -152,6 +152,8 @@ export interface EvaluatedDeal {
   specialLabel: string | null;
   /** true si el tipo especial matcheó pero con prioridad baja (ver demotePattern). */
   specialDemoted: boolean;
+  /** Cumple la combinación de OFERTA URGENTE (ver UrgentDealConfig). */
+  isUrgent: boolean;
   // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
   // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
   // buena batería/specs y simplemente no lo puso en el texto.
@@ -288,6 +290,33 @@ export interface SpecialDealConfig {
   demotePattern?: string | null;
 }
 
+/**
+ * Tipo de aviso "OFERTA URGENTE": la combinación que se compra sin pensarlo.
+ * RAM y disco por encima de un mínimo, una CPU de las buscadas, precio de
+ * lista por debajo de un tope —que puede ser mayor que `maxPriceUsd`— y sin
+ * que la publicación hable de problemas. Solo compra directa: en una subasta
+ * el precio final se desconoce.
+ */
+export interface UrgentDealConfig {
+  /** Se muestra en el aviso. */
+  label: string;
+  /** El precio tiene que ser MENOR que esto (no igual). */
+  maxPriceUsd: number;
+  minRamGb: number;
+  minStorageGb: number;
+  /** Etiquetas de cpuPatterns que cuentan (i5 12.ª, i7 11.ª y sus equivalentes Ryzen). */
+  cpuLabels: string[];
+  /**
+   * Lo que, dicho sobre el equipo, lo saca de urgente: "issues", batería
+   * ausente o mala, "not working"... Se mira en el título y en la descripción.
+   * No cuenta si viene negado ("no issues") ni si la oración habla de la
+   * política de la tienda (`issueIgnoreContextPattern`).
+   */
+  issuePattern: string;
+  issueFlags: string;
+  issueIgnoreContextPattern: string;
+}
+
 export interface ExcludePatternConfig {
   reason: string;
   pattern: string;
@@ -419,6 +448,8 @@ export interface SearchConfig {
   priorityCpus: string[];
   /** Tipos de oferta con etiqueta propia, hoy "2 en 1" (ver SpecialDealConfig). */
   specialDeals: SpecialDealConfig[];
+  /** El aviso de más alta prioridad: la combinación ideal a buen precio (ver UrgentDealConfig). */
+  urgentDeal: UrgentDealConfig;
   /**
    * Vetas que corren en TODAS las corridas, fuera de la ventana rotativa. Son
    * para los tipos especiales: el pool rotativo tenía una sola búsqueda de

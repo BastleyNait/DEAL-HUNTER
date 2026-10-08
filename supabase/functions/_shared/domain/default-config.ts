@@ -206,6 +206,39 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       demotePattern: "\\b(?:dell|latitude|inspiron|xps)\\b",
     },
   ],
+  /**
+   * OFERTA URGENTE: 16GB de RAM o más, disco SSD de 512GB o más, una de las
+   * CPUs que más importan y menos de $250 en compra directa. Es el aviso que
+   * le gana a todos los demás en el mensaje de Telegram, y se manda aunque el
+   * puntaje no llegue al umbral.
+   *
+   * CPUs: las dos prioritarias (i5 12.ª e i7 11.ª) y sus equivalentes Ryzen,
+   * que son los de rendimiento parecido: Ryzen 7 5000 (5700U, 5800H) ~ i7
+   * 11.ª; Ryzen 5 7000 (7530U) y Ryzen 7 7000 (7730U) ~ i5 12.ª. Ryzen 5 5000
+   * y Ryzen 7 4000 quedan afuera: son un escalón más abajo.
+   *
+   * El tope ($250) es mayor que maxPriceUsd ($200): solo las que cumplen todo
+   * lo demás pueden pasar de $200. El resto de las reglas (batería, daño,
+   * partes, vendedor) siguen valiendo igual.
+   *
+   * El filtro de problemas es más estricto que el descarte general: lo que
+   * ahí es un defecto declarado, acá también lo es cualquier mención de
+   * "issues", "problems", batería ausente o mala, "not working", etc. dicha
+   * sobre el equipo. Una negación ("no issues") o una oración sobre la política
+   * de la tienda ("contact us if you have any issues") no cuentan.
+   */
+  urgentDeal: {
+    label: "OFERTA URGENTE",
+    maxPriceUsd: 250,
+    minRamGb: 16,
+    minStorageGb: 512,
+    cpuLabels: ["Intel i5 12th gen", "Intel i7 11th gen", "AMD Ryzen 7 5000", "AMD Ryzen 5 7000", "AMD Ryzen 7 7000"],
+    issuePattern:
+      "\\b(?:issues?|problems?|defects?|defective|faulty|malfunction\\w*|broken|cracks?|cracked|swollen|(?:not|isn'?t|doesn'?t|don'?t|won'?t|can'?t|cannot)\\s+(?:be\\s+)?(?:working|charging|holding|booting|powering|turning|work|charge|hold|boot|power|turn)|(?:does|will)\\s+not\\s+(?:work|charge|hold|boot|power|turn)|needs?\\s+(?:a\\s+|new\\s+)?(?:battery|repair|replacement|charger)|(?:no|missing|without|bad|dead|weak|worn)\\s+battery(?!\\s+(?:issues?|problems?|wear|degradation|drain))|battery\\s+(?:is\\s+)?(?:missing|dead|bad|weak|worn|issues?|not))\\b",
+    issueFlags: "i",
+    issueIgnoreContextPattern:
+      "contact|messag|reach\\s+out|let\\s+us\\s+know|tell\\s+us|notify|return|refund|warrant|guarant|polic|if\\s+(?:you|there|any|for)|should\\s+(?:you|there|any)|in\\s+case|resolv|solv|satisf|feedback|open\\s+a\\s+case|before\\s+(?:leaving|opening|bidding)|prior\\s+to|we\\s+(?:will|'ll|are\\s+happy|stand)|ship|transit|courier|carrier|please",
+  },
   // Elegidas por cobertura contra la API real (16 búsquedas candidatas, 107
   // 2 en 1 distintos con CPU reconocible bajo $225): x360 sola cubre el 32 %,
   // y con 2n1, yoga y 2-in-1 se llega a ~75 %; cada búsqueda extra suma menos.
@@ -287,6 +320,10 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // "11th Gen i5", "Ryzen 5 5000 Series"). Ver hunt-deals/README para cómo
   // probar un patrón nuevo contra títulos reales antes de guardarlo acá.
   cpuPatterns: [
+    // Los Ryzen aceptan "PRO" entre la familia y el modelo ("Ryzen 7 PRO
+    // 5850U"): así se venden casi todas las ThinkPad y EliteBook con Ryzen, y
+    // sin eso no se reconocían.
+    //
     // i7 12va y Ryzen 7 5000 no estaban en el pedido original, pero son
     // estrictamente mejores que las que sí están (i7 11va / R7 4000 / R5 5000)
     // al mismo tope de precio. Si no las querés, se sacan del array en la fila
@@ -314,19 +351,19 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       // Serie 7000: faltaba por completo, y una de las compras reales fue un
       // Ryzen 5 7530U que el sistema ni siquiera reconocía.
       label: "AMD Ryzen 7 7000",
-      pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?7\\d{3}[a-z]{0,2}\\b",
+      pattern: "\\b(?:ryzen[\\s®™_-]*7(?:[\\s-]*pro)?|r7)[\\s-]?7\\d{3}[a-z]{0,2}\\b",
       flags: "i",
       tier: 7,
     },
     {
       label: "AMD Ryzen 5 7000",
-      pattern: "\\b(?:ryzen[\\s®™_-]*5|r5)[\\s-]?7\\d{3}[a-z]{0,2}\\b",
+      pattern: "\\b(?:ryzen[\\s®™_-]*5(?:[\\s-]*pro)?|r5)[\\s-]?7\\d{3}[a-z]{0,2}\\b",
       flags: "i",
       tier: 6,
     },
     {
       label: "AMD Ryzen 7 5000",
-      pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?5\\d{3}[a-z]{0,2}\\b",
+      pattern: "\\b(?:ryzen[\\s®™_-]*7(?:[\\s-]*pro)?|r7)[\\s-]?5\\d{3}[a-z]{0,2}\\b",
       flags: "i",
       tier: 5,
     },
@@ -344,13 +381,13 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     },
     {
       label: "AMD Ryzen 7 4000",
-      pattern: "\\b(?:ryzen[\\s®™_-]*7|r7)[\\s-]?4\\d{3}[a-z]{0,2}\\b|(?=.*\\bryzen\\b)(?=.*\\b4000\\b)",
+      pattern: "\\b(?:ryzen[\\s®™_-]*7(?:[\\s-]*pro)?|r7)[\\s-]?4\\d{3}[a-z]{0,2}\\b|(?=.*\\bryzen\\b)(?=.*\\b4000\\b)",
       flags: "i",
       tier: 3,
     },
     {
       label: "AMD Ryzen 5 5000",
-      pattern: "\\b(?:ryzen[\\s®™_-]*5|r5)[\\s-]?5\\d{3}[a-z]{0,2}\\b|(?=.*\\bryzen\\b)(?=.*\\b5000\\b)",
+      pattern: "\\b(?:ryzen[\\s®™_-]*5(?:[\\s-]*pro)?|r5)[\\s-]?5\\d{3}[a-z]{0,2}\\b|(?=.*\\bryzen\\b)(?=.*\\b5000\\b)",
       flags: "i",
       tier: 1,
     },
