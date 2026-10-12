@@ -24,7 +24,9 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // Reacondicionados (2000/2500) con "Best Offer" habilitado pueden listar hasta
   // acá: la idea es ofertar y bajar el precio final a <= maxPriceUsd antes de
   // comprar. Ver rules/exclusion-rules.ts -> priceEligibilityRule.
-  refurbishedExceptionMaxPrice: 225,
+  // Igual que el tope de OFERTA URGENTE: nada por encima de $220 (ni en la
+  // lista, ni en los avisos, ni en el dashboard).
+  refurbishedExceptionMaxPrice: 220,
   refurbishedConditionIds: [2000, 2010, 2020, 2030, 2500],
   greatDealMaxPrice: 160,
   greatDealMinScore: 80,
