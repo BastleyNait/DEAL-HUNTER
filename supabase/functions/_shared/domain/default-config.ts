@@ -208,7 +208,7 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   ],
   /**
    * OFERTA URGENTE: 16GB de RAM o más, disco SSD de 512GB o más, una de las
-   * CPUs que más importan y menos de $250 en compra directa. Es el aviso que
+   * CPUs que más importan y hasta $220 en compra directa. Es el aviso que
    * le gana a todos los demás en el mensaje de Telegram, y se manda aunque el
    * puntaje no llegue al umbral.
    *
@@ -217,7 +217,7 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * 11.ª; Ryzen 5 7000 (7530U) y Ryzen 7 7000 (7730U) ~ i5 12.ª. Ryzen 5 5000
    * y Ryzen 7 4000 quedan afuera: son un escalón más abajo.
    *
-   * El tope ($250) es mayor que maxPriceUsd ($200): solo las que cumplen todo
+   * El tope ($220, inclusive) es mayor que maxPriceUsd ($200): solo las que cumplen todo
    * lo demás pueden pasar de $200. El resto de las reglas (batería, daño,
    * partes, vendedor) siguen valiendo igual.
    *
@@ -229,7 +229,7 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    */
   urgentDeal: {
     label: "OFERTA URGENTE",
-    maxPriceUsd: 250,
+    maxPriceUsd: 220,
     minRamGb: 16,
     minStorageGb: 512,
     cpuLabels: ["Intel i5 12th gen", "Intel i7 11th gen", "AMD Ryzen 7 5000", "AMD Ryzen 5 7000", "AMD Ryzen 7 7000"],

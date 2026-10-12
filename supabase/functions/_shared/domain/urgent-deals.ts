@@ -51,7 +51,7 @@ export function createUrgentDealMatcher(config: SearchConfig): UrgentDealMatcher
     isUrgent(listing, options) {
       const lenient = options?.lenient ?? false;
 
-      if (listing.price == null || listing.price >= urgent.maxPriceUsd) return false;
+      if (listing.price == null || listing.price > urgent.maxPriceUsd) return false;
       if (listing.buyingOptions.includes("AUCTION")) return false;
 
       // Misma lectura de CPU que la selección de candidatos (título y, si no,

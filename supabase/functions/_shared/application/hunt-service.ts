@@ -63,7 +63,7 @@ function promiseOf(candidate: Candidate, config: SearchConfig, urgentMatcher: Ur
   let promise = candidate.cpuTier * 10;
 
   // Una posible OFERTA URGENTE tampoco puede quedar afuera por el tope de
-  // candidatos: es lo que más importa, y las de $200-250 solo existen por ella.
+  // candidatos: es lo que más importa, y las de $200-220 solo existen por ella.
   if (urgentMatcher.isUrgent(asPreScreenListing(candidate.summary), { lenient: true })) promise += 2000;
 
   // Una especial nunca puede quedar afuera por el tope de candidatos por

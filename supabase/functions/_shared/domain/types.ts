@@ -300,7 +300,7 @@ export interface SpecialDealConfig {
 export interface UrgentDealConfig {
   /** Se muestra en el aviso. */
   label: string;
-  /** El precio tiene que ser MENOR que esto (no igual). */
+  /** Tope de precio, inclusive: una de exactamente este precio entra. */
   maxPriceUsd: number;
   minRamGb: number;
   minStorageGb: number;
