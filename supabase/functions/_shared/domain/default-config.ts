@@ -241,6 +241,41 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     issueIgnoreContextPattern:
       "contact|messag|reach\\s+out|let\\s+us\\s+know|tell\\s+us|notify|return|refund|warrant|guarant|polic|if\\s+(?:you|there|any|for)|should\\s+(?:you|there|any)|in\\s+case|resolv|solv|satisf|feedback|open\\s+a\\s+case|before\\s+(?:leaving|opening|bidding)|prior\\s+to|we\\s+(?:will|'ll|are\\s+happy|stand)|ship|transit|courier|carrier|please",
   },
+  /**
+   * Hasta $250 si tiene 16GB de RAM o más Y 1TB de SSD o más. Solo eso: la CPU
+   * la exige la búsqueda (cualquiera de cpuPatterns) y el resto de las reglas
+   * sigue igual. Un 1TB en HDD no cuenta.
+   */
+  highSpecException: {
+    maxPriceUsd: 250,
+    minRamGb: 16,
+    minStorageGb: 1000,
+  },
+  /**
+   * Se escapaban publicaciones buenas. Auditado contra eBay en vivo (468
+   * publicaciones de 48 h con las CPUs buscadas): 48 tenían una CPU que el
+   * sistema reconoce y nunca se encontraron. Las vetas por modelo ("1135g7")
+   * ordenan por precio y solo miran las 100 más baratas, que eran de $10 a
+   * $119 (repuestos); y las de "recién publicado" son genéricas ("i5 11th
+   * gen") y no traen los títulos que solo dicen "i5-1145G7".
+   *
+   * Estas cinco agrupan los números de modelo (eBay acepta OR entre
+   * paréntesis) y ordenan por recién publicado. Las 100 más nuevas de cada una
+   * cubren entre 8 y 130 horas de publicaciones, así que corriendo cada 15
+   * minutos ninguna nueva se escapa. 5 llamadas por corrida, ~480 por día.
+   */
+  newListingProfiles: [
+    { query: "(1135g7, 1145g7, 1155g7, 1165g7, 1185g7, 1195g7)", sort: "newlyListed", maxPages: 1 },
+    { query: "(11300h, 11320h, 11370h, 11375h, 11390h, 11400h, 11800h, 11850h)", sort: "newlyListed", maxPages: 1 },
+    { query: "(1235u, 1245u, 1255u, 1265u, 1240p, 1250p, 1260p, 1270p, 12450h, 12500h, 12700h)", sort: "newlyListed", maxPages: 1 },
+    { query: "(10510u, 10610u, 10710u, 10810u, 1065g7, 10750h, 10850h, 10875h)", sort: "newlyListed", maxPages: 1 },
+    {
+      query:
+        "(5500u, 5600u, 5625u, 5650u, 5675u, 5700u, 5800u, 5825u, 5850u, 5600h, 5800h, 7530u, 7535u, 7730u, 7735u, 4700u, 4750u, 4800h, 4800u)",
+      sort: "newlyListed",
+      maxPages: 1,
+    },
+  ],
   // Elegidas por cobertura contra la API real (16 búsquedas candidatas, 107
   // 2 en 1 distintos con CPU reconocible bajo $225): x360 sola cubre el 32 %,
   // y con 2n1, yoga y 2-in-1 se llega a ~75 %; cada búsqueda extra suma menos.

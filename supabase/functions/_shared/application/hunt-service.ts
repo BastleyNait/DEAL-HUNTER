@@ -14,6 +14,7 @@ import type {
 import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
 import { createSpecialDealMatcher } from "../domain/special-deals.ts";
 import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgent-deals.ts";
+import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
@@ -49,7 +50,7 @@ export function selectProfiles(config: SearchConfig, rotationSeed: number): Sear
           const start = ((rotationSeed % pool.length) + pool.length) % pool.length;
           return Array.from({ length: count }, (_, i) => pool[(start + i) % pool.length]);
         })();
-  return [...config.specialSearchProfiles, ...rotating];
+  return [...config.specialSearchProfiles, ...config.newListingProfiles, ...rotating];
 }
 
 /**
@@ -130,6 +131,7 @@ export class HuntService {
     const cpuMatcher = createCpuMatcher(config);
     const specialMatcher = createSpecialDealMatcher(config);
     const urgentMatcher = createUrgentDealMatcher(config);
+    const highSpecMatcher = createHighSpecMatcher(config);
     // Dos juegos de reglas: el pre-descarte solo ve título y resumen, y ahí lo
     // que falta saber de una posible OFERTA URGENTE (RAM, disco) no descarta.
     const exclusionRules = createExclusionRules(config);
@@ -279,6 +281,7 @@ export class HuntService {
           config.priorityCpus.includes(candidate.cpuLabel),
           // Con el detalle completo: la RAM, el disco y los problemas ya se leen de verdad.
           qualifies && urgentMatcher.isUrgent(detail),
+          qualifies && highSpecMatcher.isHighSpec(detail),
         );
         await this.dealRepository.save(evaluatedDeal);
 
@@ -509,6 +512,7 @@ export class HuntService {
     isGreatDeal: boolean,
     isPriority = false,
     isUrgent = false,
+    isHighSpec = false,
   ) {
     const text = `${listing.title} ${listing.descriptionText}`;
     return {
@@ -528,6 +532,7 @@ export class HuntService {
       specialLabel: candidate.specialLabel,
       specialDemoted: candidate.specialDemoted,
       isUrgent,
+      isHighSpec,
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),

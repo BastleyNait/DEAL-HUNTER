@@ -154,6 +154,8 @@ export interface EvaluatedDeal {
   specialDemoted: boolean;
   /** Cumple la combinación de OFERTA URGENTE (ver UrgentDealConfig). */
   isUrgent: boolean;
+  /** Cumple la excepción de 16GB + 1TB (puede costar más que el tope general). */
+  isHighSpec: boolean;
   // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
   // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
   // buena batería/specs y simplemente no lo puso en el texto.
@@ -317,6 +319,19 @@ export interface UrgentDealConfig {
   issueIgnoreContextPattern: string;
 }
 
+/**
+ * Excepción de precio por ficha: una laptop con mucha RAM y mucho disco vale
+ * pagar más, así que puede pasar del presupuesto general hasta `maxPriceUsd`.
+ * Solo mira RAM y disco (SSD); la CPU ya la exige la búsqueda, y el resto de
+ * las reglas (batería, daño, vendedor) siguen valiendo igual.
+ */
+export interface HighSpecExceptionConfig {
+  /** Tope de precio, inclusive. */
+  maxPriceUsd: number;
+  minRamGb: number;
+  minStorageGb: number;
+}
+
 export interface ExcludePatternConfig {
   reason: string;
   pattern: string;
@@ -450,6 +465,14 @@ export interface SearchConfig {
   specialDeals: SpecialDealConfig[];
   /** El aviso de más alta prioridad: la combinación ideal a buen precio (ver UrgentDealConfig). */
   urgentDeal: UrgentDealConfig;
+  /** Hasta qué precio se acepta una de mucha RAM y mucho disco (ver HighSpecExceptionConfig). */
+  highSpecException: HighSpecExceptionConfig;
+  /**
+   * Vetas que corren en TODAS las corridas, ordenadas por recién publicado:
+   * por número de modelo de CPU, que es como titulan casi todos. Son las que
+   * garantizan ver cada publicación nueva apenas sale (ver default-config.ts).
+   */
+  newListingProfiles: SearchProfile[];
   /**
    * Vetas que corren en TODAS las corridas, fuera de la ventana rotativa. Son
    * para los tipos especiales: el pool rotativo tenía una sola búsqueda de

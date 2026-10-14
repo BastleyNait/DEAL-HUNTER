@@ -6,6 +6,7 @@ import {
   mentionsNoStorage,
 } from "../domain/hardware-signals.ts";
 import { createUrgentDealMatcher } from "../domain/urgent-deals.ts";
+import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 
 /**
  * Una regla por cada `excludePatterns` del config (data-driven: agregar una
@@ -140,6 +141,7 @@ function batteryThresholdRule(config: SearchConfig): ExclusionRule {
 function priceEligibilityRule(config: SearchConfig, lenientUrgent: boolean): ExclusionRule {
   const refurbishedIds = new Set(config.refurbishedConditionIds.map(String));
   const urgentMatcher = createUrgentDealMatcher(config);
+  const highSpecMatcher = createHighSpecMatcher(config);
   return {
     id: "price_over_budget",
     evaluate(listing: ListingDetail) {
@@ -148,6 +150,8 @@ function priceEligibilityRule(config: SearchConfig, lenientUrgent: boolean): Exc
       }
 
       if (urgentMatcher.isUrgent(listing, { lenient: lenientUrgent })) return { excluded: false };
+      // 16GB + 1TB: vale pagar más (ver highSpecException).
+      if (highSpecMatcher.isHighSpec(listing, { lenient: lenientUrgent })) return { excluded: false };
 
       const isRefurbished = listing.conditionId != null && refurbishedIds.has(listing.conditionId);
       const hasBestOffer = listing.buyingOptions.includes("BEST_OFFER");
