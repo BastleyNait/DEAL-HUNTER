@@ -338,6 +338,21 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   scorePenalties: [
     { label: "Dell Latitude", pattern: "latitude", flags: "i", points: 10, scope: "title", ignoreNegated: false },
     {
+      // Un componente que no funciona ("One USB C Port not working", "Trackpad
+      // not working"): antes descartaba la laptop entera como "para
+      // repuestos"; ahora resta puntos y la decisión es tuya. Misma lista de
+      // componentes y mismo filtro de política que declaresUnitFailure.
+      label: "Componente con falla",
+      pattern:
+        "\\b(?:ports?|usb(?:[\\s-]?[ac])?|webcam|camera|cam|speakers?|audio|sound|mic(?:rophone)?|bluetooth|wi-?fi|wireless|fingerprint|reader|touch\\s*screen|touchscreen|touch|trackpad|touchpad|mouse|clicks?|keys?|keyboard|backlight|stylus|pen|buttons?|jack|hdmi|ethernet|lan|sd|card|fan|led|lights?|sensor|nfc|sim|lte|wwan|display\\s*port|screws?|covers?|feet|foot|rubber|latch)\\b(?:[^.!?\\n|•]|\\.(?=\\d)){0,40}?\\b(?:not\\s*working|(?:does\\s*not|doesn'?t|won'?t)\\s*work|non[\\s-]?functional|inoperable)\\b",
+      flags: "i",
+      points: 10,
+      scope: "titleAndDescription",
+      ignoreNegated: true,
+      ignoreContextPattern:
+        "return|refund|warrant|guarant|polic|listed\\s+as|label|exclud|exception|unless|\\bif\\b|\\bmay\\b|\\bshould\\b|buyer|grade[sd]?\\b|definition|not\\s+tested|untested|focus\\s+materials|\\bwe\\s+(?:will|do|are|can)|contact|as\\s+described",
+    },
+    {
       label: "Declara daño",
       pattern: "\\b(?:dmg|damaged?)\\b",
       flags: "i",
@@ -430,11 +445,10 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     },
   ],
   excludePatterns: [
-    {
-      reason: "for_parts_or_not_working",
-      pattern: "for\\s*parts|not\\s*working|parts\\s*only|parts[\\s\\/]*repair|no\\s*enciende|no\\s*prende|no\\s*power",
-      flags: "i",
-    },
+    // "for_parts_or_not_working" ya no vive acá: en la descripción pasó a ser
+    // regla de código (declaresUnitFailure) porque descartaba "No power
+    // adapter included", la política de devoluciones y un puerto que no anda.
+    // En el título sigue en titleExcludePatterns.
     // "missing_storage" ya no vive acá: pasó a ser regla de código
     // (rules/exclusion-rules.ts) porque necesita cruzar la frase con la
     // ausencia de una capacidad concreta.
@@ -455,6 +469,15 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // Solo contra el título: el objetivo es revender rápido, así que cualquier
   // defecto declarado (pantalla, teclado, golpes) descarta el equipo.
   titleExcludePatterns: [
+    {
+      // En el título, cualquier mención descarta: ahí no hay política de
+      // devoluciones que confunda. Salvo "No Power Adapter/Cord", que es que
+      // viene sin cargador.
+      reason: "for_parts_or_not_working",
+      pattern:
+        "for\\s*parts|not\\s*working|parts\\s*only|parts[\\s\\/]*repair|no\\s*enciende|no\\s*prende|no\\s*power(?!\\s*(?:(?:adapter|cord|supply|supplies|cable|charger|brick|pack|plug)s?\\b|ac\\b|included))",
+      flags: "i",
+    },
     {
       reason: "part_or_component",
       pattern:

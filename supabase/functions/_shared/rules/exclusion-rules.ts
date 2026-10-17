@@ -1,6 +1,9 @@
 import type { ExclusionRule, ListingDetail, SearchConfig } from "../domain/types.ts";
 import {
   declaresDamage,
+  declaresUnitFailure,
+  declaresMissingRam,
+  declaresCracked,
   extractBatteryPercent,
   extractStorageGb,
   mentionsNoStorage,
@@ -93,6 +96,42 @@ function declaredDamageRule(): ExclusionRule {
 }
 
 /**
+ * Para repuestos o que no funciona, dicho en la descripción. Es regla de código
+ * y no un patrón de config porque necesita contexto: la regex vieja descartaba
+ * "No power adapter included", la política de devoluciones y un puerto USB
+ * que no anda (ver declaresUnitFailure). En el título sigue siendo un patrón
+ * (titleExcludePatterns), donde no hay política que confunda.
+ */
+function unitFailureRule(): ExclusionRule {
+  return {
+    id: "for_parts_or_not_working",
+    evaluate(listing: ListingDetail) {
+      return { excluded: declaresUnitFailure(listing.descriptionText), reason: "for_parts_or_not_working" };
+    },
+  };
+}
+
+/** Sin RAM: no se revende sin comprarle memoria. Título y descripción. */
+function missingRamRule(): ExclusionRule {
+  return {
+    id: "missing_ram",
+    evaluate(listing: ListingDetail) {
+      return { excluded: declaresMissingRam(`${listing.title}. ${listing.descriptionText}`), reason: "missing_ram" };
+    },
+  };
+}
+
+/** Algo rajado o roto dicho en la descripción (en el título lo cubre declared_defect). */
+function crackedRule(): ExclusionRule {
+  return {
+    id: "declared_cracked",
+    evaluate(listing: ListingDetail) {
+      return { excluded: declaresCracked(listing.descriptionText), reason: "declared_cracked" };
+    },
+  };
+}
+
+/**
  * Sin almacenamiento. Es regla de código y no un patrón de config porque cruza
  * dos señales: que el texto diga "no HD/HDD/SSD/disco" Y que además no aparezca
  * ninguna capacidad concreta. Así no se descarta un "512GB SSD, no HDD" (que sí
@@ -174,6 +213,9 @@ export function createExclusionRules(config: SearchConfig, lenientUrgent = false
     ...titlePatternRules(config),
     sellerReputationRule(config),
     declaredDamageRule(),
+    unitFailureRule(),
+    missingRamRule(),
+    crackedRule(),
     implausiblePriceRule(config),
     missingStorageRule(),
     batteryThresholdRule(config),

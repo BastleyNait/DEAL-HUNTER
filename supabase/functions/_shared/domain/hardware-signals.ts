@@ -107,6 +107,102 @@ export function mentionsOutsideContext(
   return false;
 }
 
+/**
+ * Piezas sueltas: que una de estas no funcione ("One USB C Port not working",
+ * "Trackpad not working") es un defecto menor que resta puntos, no una laptop
+ * para repuestos. La batería no está: sin batería no se revende.
+ */
+const COMPONENT_WORDS =
+  "ports?|usb(?:[\\s-]?[ac])?|webcam|camera|cam|speakers?|audio|sound|mic(?:rophone)?|bluetooth|wi-?fi|wireless|" +
+  "fingerprint|reader|touch\\s*screen|touchscreen|touch|trackpad|touchpad|mouse|clicks?|keys?|keyboard|backlight|" +
+  "stylus|pen|buttons?|jack|hdmi|ethernet|lan|sd|card|fan|led|lights?|sensor|nfc|sim|lte|wwan|display\\s*port|" +
+  "screws?|covers?|feet|foot|rubber|latch";
+
+/**
+ * Laptop entera para repuestos o que no funciona. Cada alternativa tiene su
+ * cuidado, medido contra 1.089 descartes que caían solo por la descripción:
+ *  - "not working" no cuenta si lo que no funciona es un componente que se
+ *    nombra justo antes (ver COMPONENT_WORDS).
+ *  - "no power" no cuenta si sigue "adapter/cord/charger": "No power adapter
+ *    included" era la mitad de esos descartes (402), y es solo que viene sin
+ *    cargador.
+ */
+const UNIT_FAILURE_RE = new RegExp(
+  "\\bfor\\s*parts\\b|\\bparts\\s*only\\b|\\bparts\\s*(?:\\/|or|&)?\\s*repair\\b" +
+    // Entre el componente y "not working" puede haber un número con punto
+    // ("1x USB 2.0 (NOT WORKING)"): el punto solo corta si no sigue un dígito.
+    `|(?<!\\b(?:${COMPONENT_WORDS})\\b(?:[^.!?\\n|•]|\\.(?=\\d)){0,40})\\bnot\\s*working\\b` +
+    "|\\bno\\s*power\\b(?!\\s*(?:(?:adapter|cord|supply|supplies|cable|charger|brick|pack|plug)s?\\b|ac\\b|included|issues?|problems?))" +
+    "|\\b(?:does\\s*not|doesn'?t|won'?t|will\\s*not|cannot|can'?t)\\s*(?:power|turn|boot)\\s*(?:on|up)\\b" +
+    "|\\bno\\s*enciende\\b|\\bno\\s*prende\\b",
+  "i",
+);
+
+/**
+ * Oraciones que hablan de la política de la tienda, no del equipo: "If the
+ * item is not working as described, contact us", "except items listed as
+ * AS-IS or for Parts/Repair", "May not include Focus Materials that are not
+ * working or not tested". Eran casi todas las demás falsas alarmas.
+ */
+const POLICY_CONTEXT_RE =
+  /return|refund|warrant|guarant|polic|listed\s+as|label|exclud|exception|unless|\bif\b|\bmay\b|\bshould\b|buyer|grade[sd]?\b|definition|not\s+tested|untested|focus\s+materials|\bwe\s+(?:will|do|are|can)|contact|as\s+described|\bitems\b|conditions\b|condition\s+notes|refurbished|open\s*box|units\b/i;
+
+// Las plantillas rompen las oraciones con signos sueltos ("unless the item is
+// listed ?AS-IS? or ?For Parts/Not Working?"), así que además de la oración se
+// mira lo que viene justo antes de la frase.
+const POLICY_LOOKBACK_CHARS = 120;
+
+/**
+ * La frase que dice que la laptop entera es para repuestos o no funciona, con
+ * su contexto, o null. Devuelve el texto (y no solo true) para poder ver qué
+ * disparó cada descarte.
+ */
+export function findUnitFailure(text: string): string | null {
+  const re = new RegExp(UNIT_FAILURE_RE.source, "gi");
+  for (const match of text.matchAll(re)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (NEGATION_BEFORE_RE.test(text.slice(0, start))) continue;
+    if (POLICY_CONTEXT_RE.test(sentenceAround(text, start, end))) continue;
+    if (POLICY_CONTEXT_RE.test(text.slice(Math.max(0, start - POLICY_LOOKBACK_CHARS), start))) continue;
+    return text.slice(Math.max(0, start - 60), end + 40).replace(/\s+/g, " ");
+  }
+  return null;
+}
+
+/**
+ * Sin RAM: "NO RAM", "without memory", "RAM not included". No cuenta "no RAM
+ * issues" ni la política ("may not include RAM").
+ */
+const MISSING_RAM_RE =
+  /\b(?:no|without|missing|sin)\s*(?:ram|memory|memoria)\b(?!\s*(?:issues?|problems?|errors?|upgrades?))|\b(?:ram|memory)\s*(?:is\s*)?(?:not\s*included|missing|removed)\b/i;
+
+export function declaresMissingRam(text: string): boolean {
+  return mentionsOutsideContext(text, MISSING_RAM_RE, { ignoreNegated: false, ignoreContext: POLICY_CONTEXT_RE });
+}
+
+/**
+ * Algo roto o rajado en el equipo, dicho en la descripción ("The Screen is
+ * Cracked", "crack on left palm rest", "broken hinge"). En el título ya lo
+ * cubre declared_defect. No cuenta negado ("no cracks", "crack-free") ni en
+ * las leyendas de grados ("Grade C: may have small cracks").
+ */
+const CRACKED_RE = /\b(?:cracked|cracks?|broken|shattered)\b/i;
+const GRADE_LEGEND_RE =
+  /grade|\bmay\b|\bcould\b|\bmight\b|possible|definition|cosmetic\s+condition|condition\s+(?:guide|scale)|expect|not\s+limited|such\s+as|\blike\b/i;
+
+export function declaresCracked(text: string): boolean {
+  return mentionsOutsideContext(text, CRACKED_RE, {
+    ignoreNegated: true,
+    ignoreContext: new RegExp(`${POLICY_CONTEXT_RE.source}|${GRADE_LEGEND_RE.source}`, "i"),
+  });
+}
+
+/** true si la descripción dice que la laptop entera es para repuestos o no funciona. */
+export function declaresUnitFailure(text: string): boolean {
+  return findUnitFailure(text) !== null;
+}
+
 const MIN_DESCRIPTION_LENGTH = 20;
 
 /** true si el vendedor puso una descripción con contenido real (no vacía/boilerplate corta). */
