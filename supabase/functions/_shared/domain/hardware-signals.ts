@@ -55,7 +55,7 @@ const DAMAGE_PHRASE_RE =
 
 // Negación en la misma oración, hasta 25 caracteres antes de la frase.
 const NEGATION_BEFORE_RE =
-  /\b(?:no|not|never|without|won'?t|doesn'?t|don'?t|free\s+of|free\s+from|excluding|except)\b[^.!?]{0,25}$/i;
+  /\b(?:no|not|never|nothing|none|without|won'?t|doesn'?t|don'?t|free\s+of|free\s+from|excluding|except)\b[^.!?]{0,25}$/i;
 
 export function declaresDamage(text: string): boolean {
   DAMAGE_PHRASE_RE.lastIndex = 0;
@@ -153,21 +153,32 @@ const POLICY_CONTEXT_RE =
 const POLICY_LOOKBACK_CHARS = 120;
 
 /**
- * La frase que dice que la laptop entera es para repuestos o no funciona, con
- * su contexto, o null. Devuelve el texto (y no solo true) para poder ver qué
- * disparó cada descarte.
+ * Primera mención de `pattern` que habla del equipo, con su contexto, o null.
+ * No cuenta si viene negada ("no cracks", "damage free"), ni si la oración o
+ * lo que viene justo antes matchea `ignoreContext` (política, leyendas).
+ * Devuelve el texto (y no solo true) para poder mostrar qué dijo el vendedor.
  */
-export function findUnitFailure(text: string): string | null {
-  const re = new RegExp(UNIT_FAILURE_RE.source, "gi");
+function findOutsideContext(
+  text: string,
+  pattern: RegExp,
+  ignoreContext: RegExp,
+  options: { lookback: boolean } = { lookback: true },
+): string | null {
+  const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
   for (const match of text.matchAll(re)) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
-    if (NEGATION_BEFORE_RE.test(text.slice(0, start))) continue;
-    if (POLICY_CONTEXT_RE.test(sentenceAround(text, start, end))) continue;
-    if (POLICY_CONTEXT_RE.test(text.slice(Math.max(0, start - POLICY_LOOKBACK_CHARS), start))) continue;
-    return text.slice(Math.max(0, start - 60), end + 40).replace(/\s+/g, " ");
+    if (NEGATION_BEFORE_RE.test(text.slice(0, start)) || NEGATION_AFTER_RE.test(text.slice(end))) continue;
+    if (ignoreContext.test(sentenceAround(text, start, end))) continue;
+    if (options.lookback && ignoreContext.test(text.slice(Math.max(0, start - POLICY_LOOKBACK_CHARS), start))) continue;
+    return text.slice(Math.max(0, start - 50), end + 40).replace(/\s+/g, " ").trim();
   }
   return null;
+}
+
+/** La frase que dice que la laptop entera es para repuestos o no funciona, o null. */
+export function findUnitFailure(text: string): string | null {
+  return findOutsideContext(text, UNIT_FAILURE_RE, POLICY_CONTEXT_RE);
 }
 
 /**
@@ -181,21 +192,59 @@ export function declaresMissingRam(text: string): boolean {
   return mentionsOutsideContext(text, MISSING_RAM_RE, { ignoreNegated: false, ignoreContext: POLICY_CONTEXT_RE });
 }
 
-/**
- * Algo roto o rajado en el equipo, dicho en la descripción ("The Screen is
- * Cracked", "crack on left palm rest", "broken hinge"). En el título ya lo
- * cubre declared_defect. No cuenta negado ("no cracks", "crack-free") ni en
- * las leyendas de grados ("Grade C: may have small cracks").
- */
-const CRACKED_RE = /\b(?:cracked|cracks?|broken|shattered)\b/i;
+// Leyendas genéricas de condición ("Grade C: may have small cracks", "expect
+// cosmetic flaws like scratches, dents, cracks"): no hablan de esta laptop.
 const GRADE_LEGEND_RE =
   /grade|\bmay\b|\bcould\b|\bmight\b|possible|definition|cosmetic\s+condition|condition\s+(?:guide|scale)|expect|not\s+limited|such\s+as|\blike\b/i;
+const NOT_ABOUT_THIS_UNIT_RE = new RegExp(`${POLICY_CONTEXT_RE.source}|${GRADE_LEGEND_RE.source}`, "i");
 
-export function declaresCracked(text: string): boolean {
-  return mentionsOutsideContext(text, CRACKED_RE, {
-    ignoreNegated: true,
-    ignoreContext: new RegExp(`${POLICY_CONTEXT_RE.source}|${GRADE_LEGEND_RE.source}`, "i"),
-  });
+/**
+ * Lo que no se revende: pantalla rajada o rota, y la bisagra rajada o rota.
+ * Esto descarta. El resto de las grietas (bezel, carcasa, cerca del trackpad)
+ * no: se marcan para revisar las fotos (ver findCosmeticNote).
+ */
+// Entre "screen" y "cracked" no puede haber otra pieza: "Screen Bezel
+// Cracked" es el marco, no la pantalla.
+const NOT_OTHER_PART = "(?:(?!bezel|frame|cover|case|housing|lid|palm|bottom|corner|hinge)[^.!?\\n|•])";
+const SEVERE_CRACK_RE = new RegExp(
+  `\\b(?:screen|lcd|display|panel|glass|digitizer)\\b${NOT_OTHER_PART}{0,25}?\\b(?:cracked|cracks?|shattered|broken)\\b` +
+    `|\\b(?:cracked|cracks?|shattered|broken)\\b${NOT_OTHER_PART}{0,25}?\\b(?:screen|lcd|display|panel|glass|digitizer)\\b` +
+    "|\\bhinges?\\b(?:[^.!?\\n|•]){0,20}?\\b(?:cracked|cracks?|broken)\\b|\\b(?:cracked|broken)\\s+hinges?\\b",
+  "i",
+);
+
+// Para lo grave se pide más para ignorarlo: solo la política de la tienda y
+// los condicionales ("may have", "could"), y mirando nada más la oración.
+// "Grade C: Cracked Screen – the screen on the device will be cracked" es esa
+// laptop, aunque diga "Grade".
+const SEVERE_IGNORE_RE =
+  /return|refund|warrant|guarant|polic|\bif\b|\bmay\b|\bmight\b|\bcould\b|possible|\bunless\b|exclud|expect|not\s+limited|such\s+as/i;
+
+/** La frase que dice que la pantalla o la bisagra está rajada o rota, o null. */
+export function findSevereCrack(text: string): string | null {
+  return findOutsideContext(text, SEVERE_CRACK_RE, SEVERE_IGNORE_RE, { lookback: false });
+}
+
+export function declaresSevereCrack(text: string): boolean {
+  return findSevereCrack(text) !== null;
+}
+
+// Detalles que se aceptan si son chicos, pero hay que verlos en las fotos.
+// En la descripción solo grietas y "broken": "minor scratches and dents" está
+// en casi todas las usadas y marcaría todo. En el título, además, golpes y
+// daño estético declarado (el vendedor lo destaca, así que vale mirarlo).
+const COSMETIC_DESCRIPTION_RE = /\b(?:cracked|cracks?|broken)\b/i;
+const COSMETIC_TITLE_RE = /\b(?:cracked|cracks?|dented|dents?|cosmetic\s*(?:issues?|damage|defects?|flaws?))\b/i;
+
+/**
+ * Lo que dijo el vendedor sobre una grieta, golpe o daño estético, para
+ * revisar las fotos antes de comprar, o null. No descarta: marca.
+ */
+export function findCosmeticNote(title: string, description: string): string | null {
+  return (
+    findOutsideContext(title, COSMETIC_TITLE_RE, NOT_ABOUT_THIS_UNIT_RE) ??
+    findOutsideContext(description, COSMETIC_DESCRIPTION_RE, NOT_ABOUT_THIS_UNIT_RE)
+  );
 }
 
 /** true si la descripción dice que la laptop entera es para repuestos o no funciona. */

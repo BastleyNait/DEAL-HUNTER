@@ -19,6 +19,7 @@ import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rul
 import {
   extractBatteryGrade,
   extractRamGb,
+  findCosmeticNote,
   hasMeaningfulDescription,
   listingFingerprint,
   mentionsBattery,
@@ -533,6 +534,7 @@ export class HuntService {
       specialDemoted: candidate.specialDemoted,
       isUrgent,
       isHighSpec,
+      cosmeticNote: findCosmeticNote(listing.title, listing.descriptionText),
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),

@@ -49,6 +49,10 @@ export function formatMessage(deal: EvaluatedDeal): string {
   if (missing.length > 0) {
     lines.push(`⚠️ ${missing.join(" · ")} — revisar la publicación antes de comprar`);
   }
+  // Grieta o golpe que no descarta: lo que dijo el vendedor, para mirar las fotos.
+  if (deal.cosmeticNote) {
+    lines.push(`🔍 Revisar fotos — el vendedor dice: «${escapeHtml(deal.cosmeticNote)}»`);
+  }
 
   lines.push(``, deal.url);
   return lines.join("\n");

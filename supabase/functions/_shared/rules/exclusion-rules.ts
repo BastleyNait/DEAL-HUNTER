@@ -3,7 +3,7 @@ import {
   declaresDamage,
   declaresUnitFailure,
   declaresMissingRam,
-  declaresCracked,
+  declaresSevereCrack,
   extractBatteryPercent,
   extractStorageGb,
   mentionsNoStorage,
@@ -121,12 +121,15 @@ function missingRamRule(): ExclusionRule {
   };
 }
 
-/** Algo rajado o roto dicho en la descripción (en el título lo cubre declared_defect). */
+/**
+ * Pantalla o bisagra rajada o rota: eso no se revende. Las demás grietas
+ * (bezel, carcasa) no descartan: se marcan para revisar fotos (cosmeticNote).
+ */
 function crackedRule(): ExclusionRule {
   return {
     id: "declared_cracked",
     evaluate(listing: ListingDetail) {
-      return { excluded: declaresCracked(listing.descriptionText), reason: "declared_cracked" };
+      return { excluded: declaresSevereCrack(`${listing.title}. ${listing.descriptionText}`), reason: "declared_cracked" };
     },
   };
 }

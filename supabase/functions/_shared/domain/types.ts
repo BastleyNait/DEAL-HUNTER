@@ -156,6 +156,12 @@ export interface EvaluatedDeal {
   isUrgent: boolean;
   /** Cumple la excepción de 16GB + 1TB (puede costar más que el tope general). */
   isHighSpec: boolean;
+  /**
+   * Lo que dijo el vendedor de una grieta, golpe o daño estético que no
+   * descarta (no es la pantalla ni la bisagra), para revisar las fotos antes
+   * de comprar. Null si no menciona nada.
+   */
+  cosmeticNote: string | null;
   // No descartan nada (una laptop sin datos no es "mala"), pero se guardan para
   // marcarlas en el dashboard como "revisar a mano" — el vendedor puede tener
   // buena batería/specs y simplemente no lo puso en el texto.

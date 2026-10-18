@@ -511,9 +511,13 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     {
       // El lookbehind evita descartar por frases positivas del estilo
       // "no cracks or dents", que son justamente lo que buscamos.
+      // "Cracked", "dented" y "cosmetic damage" ya no están: una grieta chica,
+      // un golpe o un detalle estético se aceptan y se marcan para revisar las
+      // fotos (findCosmeticNote). La pantalla rajada la sigue descartando
+      // screen_defect, y la bisagra declared_cracked.
       reason: "declared_defect",
       pattern:
-        "\\bcosmetic\\s*(?:issue|damage|defect|flaw)|\\bas[-\\s]is\\b|\\bwater\\s*damage\\b|(?<!\\bno\\s)(?<!\\bnot\\s)(?<!\\bsin\\s)\\b(?:cracked|broken|damaged|dented|defective|faulty)\\b",
+        "\\bas[-\\s]is\\b|\\bwater\\s*damage\\b|(?<!\\bno\\s)(?<!\\bnot\\s)(?<!\\bsin\\s)\\b(?:broken|damaged|defective|faulty)\\b",
       flags: "i",
     },
   ],
