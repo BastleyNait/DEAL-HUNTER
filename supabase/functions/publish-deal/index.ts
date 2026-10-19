@@ -6,6 +6,7 @@ import { SupabaseConfigProvider } from "../_shared/infrastructure/supabase-confi
 import { SupabasePublicationRepository } from "../_shared/infrastructure/supabase-publication-repository.ts";
 import { RevoltStorePublishTarget } from "../_shared/infrastructure/revolt-store-publish-target.ts";
 import type { PublicationRepository, StorePublishTarget } from "../_shared/domain/types.ts";
+import { legacyIdFromUrl, recordPurchase } from "../_shared/infrastructure/purchases.ts";
 
 // Se llama desde el navegador (el dashboard, sin login), a diferencia de
 // hunt-deals que solo lo llama el cron. Por eso lleva CORS y un secreto propio
@@ -73,6 +74,59 @@ Deno.serve(async (req) => {
     );
     try {
       return json({ data: await service.resolve(String(body.url ?? "")) });
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  }
+
+  // Cola de "compradas por publicar" (tabla purchases). Agregar y quitar solo
+  // tocan la tabla; el borrador sí lee eBay, pero de a un ítem y solo la
+  // primera vez: después sale del caché (purchases.draft).
+  if (body.action === "purchase-add") {
+    try {
+      const url = String(body.url ?? "");
+      const legacyId = legacyIdFromUrl(url);
+      if (!legacyId) return json({ error: "No es un link de eBay con /itm/<número>." }, 400);
+      await recordPurchase(supabase, { itemId: `v1|${legacyId}|0`, url, source: "manual" });
+      return json({ data: { legacyId } });
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  }
+
+  if (body.action === "purchase-dismiss") {
+    const { error } = await supabase
+      .from("purchases")
+      .update({ dismissed_at: new Date().toISOString() })
+      .eq("legacy_id", String(body.legacyId ?? ""));
+    return error ? json({ error: error.message }, 500) : json({ data: { ok: true } });
+  }
+
+  if (body.action === "purchase-draft") {
+    try {
+      const legacyId = String(body.legacyId ?? "");
+      const { data: purchase, error } = await supabase
+        .from("purchases")
+        .select("url, draft")
+        .eq("legacy_id", legacyId)
+        .maybeSingle();
+      if (error || !purchase) return json({ error: "Esa compra no está en la cola." }, 404);
+      if (purchase.draft && !body.refresh) return json({ data: purchase.draft, cached: true });
+
+      const service = new PublishService(
+        new SupabaseConfigProvider(supabase),
+        new EbayMarketplaceClient(new EbayTokenStore(supabase)),
+        NULL_STORE_TARGET,
+        NULL_PUBLICATION_REPOSITORY,
+      );
+      const draft = await service.resolve(purchase.url);
+      await supabase
+        .from("purchases")
+        .update({ draft, draft_at: new Date().toISOString(), item_id: draft.itemId })
+        .eq("legacy_id", legacyId);
+      return json({ data: draft, cached: false });
     } catch (err) {
       console.error(err);
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);

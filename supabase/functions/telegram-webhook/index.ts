@@ -8,6 +8,7 @@ import {
   type DealReaction,
   type ReactionRow,
 } from "../_shared/infrastructure/telegram-deal-reactions.ts";
+import { recordPurchase, removeTelegramPurchase } from "../_shared/infrastructure/purchases.ts";
 
 /**
  * Recibe los mensajes que le llegan al bot y los botones que se tocan
@@ -237,7 +238,8 @@ async function handleDealReaction(
   if (mine?.reaction === reaction) {
     // Mismo botón otra vez: deshacer.
     await supabase.from("deal_reactions").delete().eq("item_id", itemId).eq("chat_id", chatId);
-    notice = reaction === "buy" ? "Listo, ya no figura que la comprás." : "Quitado.";
+    if (reaction === "buy") await removeTelegramPurchase(supabase, itemId).catch((err) => console.error(err));
+    notice = reaction === "buy" ? "Listo, ya no figura que la comprás (y salió de la cola de Publicar)." : "Quitado.";
   } else if (reaction === "buy" && buyer && buyer.chat_id !== chatId) {
     await answerCallback(botToken, callback.id, `Ya la está comprando ${buyer.name ?? "otra persona"}.`);
     return;
@@ -250,7 +252,21 @@ async function handleDealReaction(
       await answerCallback(botToken, callback.id, "Otra persona la acaba de marcar. Mirá el mensaje.");
       return;
     }
-    notice = reaction === "buy" ? "🛒 Marcado: la estás comprando. Les avisé a los demás." : "👎 Marcado: pasás de esta.";
+    if (reaction === "buy") {
+      // Queda en la cola de "compradas por publicar" del dashboard: ya no hay
+      // que pegar el link a mano.
+      const { data: listing } = await supabase.from("seen_listings").select("url").eq("item_id", itemId).maybeSingle();
+      await recordPurchase(supabase, { itemId, url: listing?.url ?? null, source: "telegram", boughtBy: name }).catch((err) =>
+        console.error("No se pudo registrar la compra:", err)
+      );
+    } else if (mine?.reaction === "buy") {
+      // Pasó de "la compro" a "paso": sale de la cola.
+      await removeTelegramPurchase(supabase, itemId).catch((err) => console.error(err));
+    }
+    notice =
+      reaction === "buy"
+        ? "🛒 Marcado: la estás comprando. Les avisé a los demás y quedó en la cola de Publicar."
+        : "👎 Marcado: pasás de esta.";
   }
 
   await answerCallback(botToken, callback.id, notice);
