@@ -55,7 +55,9 @@ const DAMAGE_PHRASE_RE =
 
 // Negación en la misma oración, hasta 25 caracteres antes de la frase.
 const NEGATION_BEFORE_RE =
-  /\b(?:no|not|never|nothing|none|without|won'?t|doesn'?t|don'?t|free\s+of|free\s+from|excluding|except)\b[^.!?]{0,25}$/i;
+  // "No issues" / "No problems" niegan lo suyo, no lo que viene después: en
+  // "Keyboard: Good - No issues Power Supply: Included" el cargador sí viene.
+  /\b(?:no|not|never|nothing|none|without|won'?t|doesn'?t|don'?t|free\s+of|free\s+from|excluding|except)\b(?!\s+(?:issues?|problems?)\b)[^.!?]{0,25}$/i;
 
 export function declaresDamage(text: string): boolean {
   DAMAGE_PHRASE_RE.lastIndex = 0;

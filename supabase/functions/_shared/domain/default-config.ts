@@ -10,6 +10,15 @@ import type { SearchConfig } from "./types.ts";
  * SupabaseConfigProvider cae acá. Para cambiar el criterio sin tocar código,
  * editá la fila en la tabla `search_config` — no hace falta redeployar.
  */
+/**
+ * Lo que sigue a "Latitude" en una de gama alta: la serie 7000 o 9000, con la
+ * pulgada opcional en el medio ("Latitude 7420", "Latitude E7470", "Latitude
+ * 14" 7420"). Compartido entre el escalafón y la resta de Latitude para que no
+ * se contradigan.
+ */
+const LATITUDE_PREMIUM_SUFFIX = `[\\s-]*(?:\\d{1,2}(?:\\.\\d)?\\s*(?:"|”|''|in(?:ch)?|-inch)?\\s*)?e?[79]\\d{3}\\b`;
+const DELL_PREMIUM_PATTERN = `\\bxps\\b|\\bprecision\\b|\\blatitude${LATITUDE_PREMIUM_SUFFIX}`;
+
 export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   marketplaceId: "EBAY_US",
   // 177 = "PC Laptops & Netbooks" en eBay US.
@@ -314,10 +323,22 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * Aspire) caen al valor de respaldo.
    */
   modelTiers: [
+    {
+      // Las Dell de gama alta no son las Latitude que llegan maltratadas:
+      // Latitude 7000/9000 (magnesio/aluminio), XPS y Precision. Van primero
+      // porque el patrón de "Dell Latitude" de más abajo también las matchea.
+      label: "Dell premium (Latitude 7000/9000, XPS, Precision)",
+      pattern: DELL_PREMIUM_PATTERN,
+      flags: "i",
+      weight: 0.85,
+    },
     { label: "ThinkPad T / X / P", pattern: "thinkpad\\s*[txp]\\d|thinkpad\\s*x1", flags: "i", weight: 1 },
     { label: "ThinkPad (cualquier línea)", pattern: "thinkpad|think\\s*pad", flags: "i", weight: 0.95 },
     { label: "HP EliteBook / ZBook", pattern: "elitebook|zbook", flags: "i", weight: 0.85 },
     { label: "Dynabook Portégé / Tecra", pattern: "port[ée]g[ée]|portege|dynabook|tecra", flags: "i", weight: 0.8 },
+    // ThinkBook es la línea de negocio chica de Lenovo: no llega a ThinkPad,
+    // pero se revende mejor que una de consumo (antes caía al valor de respaldo).
+    { label: "Lenovo ThinkBook", pattern: "think\\s*book", flags: "i", weight: 0.7 },
     { label: "HP ProBook", pattern: "probook", flags: "i", weight: 0.68 },
     { label: "Dell Precision / Surface Laptop", pattern: "precision|surface\\s*laptop", flags: "i", weight: 0.55 },
     { label: "Dell Latitude", pattern: "latitude", flags: "i", weight: 0.5 },
@@ -336,7 +357,31 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * "paint damage on lid", "left-side hinge damaged".
    */
   scorePenalties: [
-    { label: "Dell Latitude", pattern: "latitude", flags: "i", points: 10, scope: "title", ignoreNegated: false },
+    {
+      // Solo las Latitude comunes (3000/5000): las 7000/9000 son de gama alta
+      // y no llegan maltratadas (ver DELL_PREMIUM_PATTERN).
+      label: "Dell Latitude",
+      pattern: `\\blatitude\\b(?!${LATITUDE_PREMIUM_SUFFIX})`,
+      flags: "i",
+      points: 10,
+      scope: "title",
+      ignoreNegated: false,
+    },
+    {
+      // Puntos negativos = suma. Que traiga cargador ahorra comprarlo y es
+      // señal de un vendedor que entrega el equipo completo. "No AC adapter",
+      // "Charger Included: No" o "incluye cargador si sale en la foto" no
+      // cuentan.
+      label: "Incluye cargador",
+      pattern:
+        "(?:\\b(?:includes?|including|included|comes\\s+with|ships\\s+with|with)\\b|w\\/|\\+)\\s*(?:(?:an?|the|original|oem|genuine)\\s+)*(?:ac\\s*|power\\s*)?(?:adapter|charger|power\\s*(?:supply|cord|cable))s?\\b" +
+        "|\\b(?:ac\\s*adapter|power\\s*adapter|charger|power\\s*supply|power\\s*cord)s?\\s*(?:is\\s*|are\\s*)?(?:[:\\-]\\s*)?(?:included|yes)\\b(?!\\s*[:\\-]?\\s*(?:no|not|n\\/a)\\b)",
+      flags: "i",
+      points: -5,
+      scope: "titleAndDescription",
+      ignoreNegated: true,
+      ignoreContextPattern: "\\bif\\b|unless|\\bmay\\b|optional|sold\\s+separately|not\\s+included|purchase|available|upgrade|add-?on",
+    },
     {
       // Un componente que no funciona ("One USB C Port not working", "Trackpad
       // not working"): antes descartaba la laptop entera como "para

@@ -361,6 +361,7 @@ export interface ScorePenaltyConfig {
   label: string;
   pattern: string;
   flags: string;
+  /** Puntos a restar. Negativo suma (una bonificación, ej. "Incluye cargador"). */
   points: number;
   /** Dónde buscar: solo el título, o título más descripción. */
   scope: "title" | "titleAndDescription";

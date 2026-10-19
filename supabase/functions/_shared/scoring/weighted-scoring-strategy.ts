@@ -21,7 +21,9 @@ export function createWeightedScoringStrategy(
       const weighted = factors.reduce((sum, factor) => sum + factor.score(listing, ctx) * factor.weight, 0);
       // Las penalizaciones se restan antes de decidir si es ofertaza, así una
       // Latitude que quedaba justo en el umbral deja de serlo.
-      const score = Math.max(0, Math.round(weighted * 100) - penaltyPoints(penalties, listing));
+      // Una penalización negativa suma (ej. "Incluye cargador"), así que se
+      // acota también por arriba.
+      const score = Math.min(100, Math.max(0, Math.round(weighted * 100) - penaltyPoints(penalties, listing)));
 
       // Una subasta nunca es "ofertaza": el precio que vemos es la puja actual,
       // no lo que vas a terminar pagando, así que no hay forma de afirmar que
