@@ -40,11 +40,13 @@ const CONVERTIBLE_RE = /\b(yoga|x360|2[\s-]?in[\s-]?1|convertible|flip)\b/i;
 // Reutiliza las mismas etiquetas de modelTiers (default-config.ts) para no
 // mantener un segundo criterio de "qué es esta línea" en otro lado.
 const AUDIENCE_BY_MODEL_LABEL: Record<string, Audience> = {
+  "Dell premium (Latitude 7000/9000, XPS, Precision)": "premium",
   "ThinkPad T / X / P": "premium",
   "HP EliteBook / ZBook": "premium",
   "Dell Precision / Surface Laptop": "premium",
   "Dynabook Portégé / Tecra": "portable",
   "ThinkPad (cualquier línea)": "business",
+  "Lenovo ThinkBook": "business",
   "Dell Latitude": "business",
   "HP ProBook": "business",
 };
@@ -75,9 +77,53 @@ const AUDIENCE_COPY: Record<Audience, { hook: string; bullet: string }> = {
   },
 };
 
-// Bloque de marca fijo, mismo texto en toda publicación.
-const STORE_URL = "https://revolt-laptops.vercel.app/";
-const STORE_SIGNATURE = "SOMOS REVOLT — RENDIMIENTO SIN COMPROMISOS";
+/**
+ * Encabezado y párrafo de apertura de la descripción. El tono sigue el modelo
+ * que armaste a mano para la ThinkPad E14 Gen 2: primero a quién está
+ * dirigida, después por qué el procesador la hace buena para eso.
+ */
+type Headline = "highEnd" | "convertible" | "portable" | "business" | "everyday";
+
+const HEADLINE_COPY: Record<Headline, { title: string; intro: string }> = {
+  highEnd: {
+    title: "Rendimiento de Alta Gama",
+    intro: "Diseñada para profesionales, programadores y estudiantes avanzados que requieren máxima velocidad en su día a día.",
+  },
+  convertible: {
+    title: "Versatilidad 2 en 1",
+    intro:
+      "Laptop y tablet en un solo equipo: su pantalla táctil gira 360° para presentar, tomar apuntes o dibujar, ideal para estudiantes y profesionales en movimiento.",
+  },
+  portable: {
+    title: "Ultraliviana y Portátil",
+    intro: "Pensada para quienes trabajan o estudian en movimiento y necesitan un equipo liviano que rinda todo el día.",
+  },
+  business: {
+    title: "Confiabilidad Empresarial",
+    intro:
+      "Línea corporativa reconocida por su durabilidad, ideal para trabajo de oficina, universidad y teletrabajo en jornadas largas.",
+  },
+  everyday: {
+    title: "Ideal para el Día a Día",
+    intro: "Perfecta para estudiar, trabajar desde casa, clases virtuales y entretenimiento, con la fluidez que se necesita a diario.",
+  },
+};
+
+/** Alta gama si la línea es premium o el procesador es de la franja alta (i7 / Ryzen 7), como en tu ThinkPad E14 con i7. */
+function pickHeadline(audience: Audience, cpuLabel: string | null): Headline {
+  if (audience === "convertible") return "convertible";
+  if (audience === "premium" || /\bi7\b|ryzen 7/i.test(cpuLabel ?? "")) return "highEnd";
+  if (audience === "portable") return "portable";
+  if (audience === "business") return "business";
+  return "everyday";
+}
+
+// Bloque fijo de calidad, logística y software: mismo texto en toda publicación.
+const QUALITY_BLOCK =
+  "Cada uno de nuestros equipos pasa por un riguroso proceso de diagnóstico, mantenimiento técnico y pruebas de rendimiento antes de ser publicado. Entregamos hardware 100% funcional y listo para trabajar.";
+const LOGISTICS_LINE = "* 🚚 Logística: Envíos a todo el Perú. (Entrega presencial disponible en la ciudad de Arequipa).";
+const SOFTWARE_LINE =
+  "* 💿 Software: Incluye Microsoft Office (Word, Excel, PowerPoint, etc.) y otros programas que necesites, previo aviso.";
 
 // Corta el título en el primer token que ya es una spec, no una descripción
 // del equipo: CPU ("i5-1135G7", "Ryzen 5"), RAM/storage ("16GB"), Windows, o
@@ -87,7 +133,11 @@ const STORE_SIGNATURE = "SOMOS REVOLT — RENDIMIENTO SIN COMPROMISOS";
 // título real en vez de tipeado de nuevo.
 // El sufijo de CPU Intel puede terminar en letra+dígito ("...1165G7"), no solo
 // letras ("...1135U"): [a-z0-9]{0,3} cubre ambos en vez de solo [a-z]{0,2}.
-const SPEC_START_RE = /\b(?:i[3579][\s-]?\d{3,5}[a-z0-9]{0,3}\b|ryzen\s*\d|\d{1,3}\s?gb\b|\d\s?tb\b|win(?:dows)?\s?1[01]\b|@\s?\d|\|)/i;
+// También corta en el tamaño de pantalla ("14\"", "15.6 in"), en lo que ya es
+// ficha (FHD, Touch, Intel, AMD, Core) y en " - ", para que quede "Lenovo
+// ThinkPad E14 Gen 2" y no "Lenovo ThinkPad E14 Gen 2 14\" FHD Intel Core".
+const SPEC_START_RE =
+  /\b(?:i[3579][\s-]?\d{3,5}[a-z0-9]{0,3}\b|ryzen\s*\d|\d{1,3}\s?gb\b|\d\s?tb\b|win(?:dows)?\s?1[01]\b|1[1-7](?:\.\d)?\s?(?:"|”|''|in\b|inch|-inch)|(?:fhd|uhd|qhd|hd\+?|touch(?:screen)?|intel|amd|core|laptop|notebook)\b)|@\s?\d|\||\s[-–—]\s|\(/i;
 
 function extractModelLine(title: string): string {
   const match = title.match(SPEC_START_RE);
@@ -175,54 +225,113 @@ function buildTitle(brand: string, audience: Audience, ram: number, storageGb: n
   return title;
 }
 
+/** Modelo exacto del procesador tal como lo escribió el vendedor: "Intel Core i7-1165G7", "AMD Ryzen 7 4700U". */
+function exactCpuModel(text: string): string | null {
+  const intel = text.match(/\b(i[3579])[\s-]?(\d{4,5}[a-z0-9]{0,3})\b/i);
+  if (intel) return `Intel Core ${intel[1].toLowerCase()}-${intel[2].toUpperCase()}`;
+  const amd = text.match(/\bryzen\s*([3579])\s*(?:pro\s*)?(\d{4}[a-z]{0,2})\b/i);
+  if (amd) return `AMD Ryzen ${amd[1]} ${amd[2].toUpperCase()}`;
+  return null;
+}
+
+/**
+ * Gráficos integrados, solo cuando se puede afirmar: Iris Xe viene en los
+ * i5/i7 de 11.ª y 12.ª de las series G7, U y P (no en todos los H), y Radeon
+ * en los Ryzen con gráficos integrados de la serie U.
+ */
+function graphicsPhrase(model: string | null): string {
+  if (!model) return "gráficos integrados";
+  if (/i[57]-11\d{2}G7|i[57]-12\d{2}[UP]\b/i.test(model)) return "gráficos integrados fluidos gracias a la tecnología Iris Xe";
+  if (/Ryzen \d \d{4}U/i.test(model)) return "gráficos integrados Radeon";
+  return "gráficos integrados";
+}
+
+/** "Intel i7 11th gen" -> "Intel Core i7 de 11.ª generación" (para la frase, no para la ficha). */
+function cpuInProse(cpuLabel: string | null): string | null {
+  if (!cpuLabel) return null;
+  const intel = cpuLabel.match(/^Intel i(\d) (\d{1,2})(?:st|nd|rd|th) gen$/i);
+  if (intel) return `Intel Core i${intel[1]} de ${intel[2]}.ª generación`;
+  const amd = cpuLabel.match(/^AMD Ryzen (\d) (\d{3,4})$/i);
+  if (amd) return `AMD Ryzen ${amd[1]} de la serie ${amd[2]}`;
+  return simplifyCpu(cpuLabel);
+}
+
+function cpuBenefit(cpuLabel: string | null): string {
+  if (/\bi7\b/i.test(cpuLabel ?? "")) return "Rendimiento de nivel corporativo.";
+  if (/ryzen 7/i.test(cpuLabel ?? "")) return "Potencia multinúcleo de alto nivel.";
+  if (/ryzen 5/i.test(cpuLabel ?? "")) return "Rendimiento ágil y eficiente.";
+  return "Equilibrio ideal entre potencia y eficiencia.";
+}
+
+function ramBenefit(ram: number): string {
+  if (ram >= 32) return "Potencia de sobra para programación, edición y máquinas virtuales.";
+  if (ram >= 16) return "Fluidez absoluta con múltiples aplicaciones en paralelo.";
+  return "Suficiente para ofimática, navegación y clases virtuales.";
+}
+
+/** "Usado, buen estado funcional." — la misma condición de conditionHeadline, en tono de frase. */
+function conditionSentence(condition: string | null): string {
+  const headline = conditionHeadline(condition).toLowerCase();
+  return `${headline.charAt(0).toUpperCase()}${headline.slice(1)}.`;
+}
+
+/** "14 in" / "14\"" -> "14 pulgadas", con Full HD y táctil solo si lo dice la publicación. */
+function screenLine(screenSize: string | null, text: string): string | null {
+  const size = screenSize?.match(/\d{2}(?:\.\d)?/)?.[0] ?? text.match(/\b(1[1-7](?:\.\d)?)\s?(?:"|”|''|in\b|inch|-inch|pulgadas)/i)?.[1];
+  if (!size) return null;
+  const fhd = /\b(?:fhd|full\s*hd|1920\s*x\s*1080|1080p)\b/i.test(text);
+  const touch = /\btouch(?:screen)?\b|táctil/i.test(text);
+  const details = [fhd ? "Full HD" : null, touch ? "táctil" : null].filter(Boolean).join(" ");
+  return `* Pantalla: ${size} pulgadas${details ? ` ${details}` : ""} – Definición óptima para extensas jornadas de trabajo.`;
+}
+
 function buildDescription(input: {
   audience: Audience;
   modelLine: string;
   condition: string | null;
-  cpuSimplified: string | null;
+  cpuLabel: string | null;
+  text: string;
   ram: number;
   storageGb: number;
   screenSize: string | null;
   batteryPct: number | null;
   hasCharger: boolean;
 }): string {
+  const headline = HEADLINE_COPY[pickHeadline(input.audience, input.cpuLabel)];
   const storage =
     input.storageGb >= 1000 ? `${Math.round(input.storageGb / 1000)}TB` : input.storageGb > 0 ? `${input.storageGb}GB` : null;
 
+  const model = exactCpuModel(input.text);
+  const ghz = input.text.match(/\b(\d\.\d{1,2})\s?ghz\b/i)?.[1];
+  const prose = cpuInProse(input.cpuLabel);
+  const cpuSentence = prose
+    ? ` Esta laptop destaca por su procesador ${prose}${ghz ? ` a ${ghz}GHz` : ""}${model ? ` (${model})` : ""}, una arquitectura optimizada para la multitarea exigente, la ejecución de software pesado y ${graphicsPhrase(model)}.`
+    : "";
+
   const specLines = [
-    input.cpuSimplified ? `💻 Procesador: ${input.cpuSimplified}` : null,
-    input.ram > 0 ? `🧠 Memoria RAM: ${input.ram}GB` : null,
-    storage ? `💾 Almacenamiento: ${storage} SSD (arranque rápido)` : null,
-    input.screenSize ? `🖥️ Pantalla: ${input.screenSize}` : null,
-    input.batteryPct != null ? `🔋 Batería: ${input.batteryPct}% de su capacidad original` : null,
+    input.cpuLabel ? `* Procesador: ${simplifyCpu(input.cpuLabel)} – ${cpuBenefit(input.cpuLabel)}` : null,
+    input.ram > 0 ? `* Memoria RAM: ${input.ram}GB – ${ramBenefit(input.ram)}` : null,
+    storage
+      ? `* Almacenamiento: ${storage} SSD – Unidad de estado sólido para un arranque inmediato${input.storageGb >= 1000 ? " y espacio de sobra" : ""}.`
+      : null,
+    screenLine(input.screenSize, input.text),
+    input.batteryPct != null ? `* Batería: ${input.batteryPct}% de su capacidad original.` : null,
   ].filter((l): l is string => Boolean(l));
 
-  // "Profesionalmente reacondicionado" es una afirmación sobre un proceso que
-  // se hizo — solo se pone cuando el propio vendedor de eBay ya declaró la
-  // publicación como reacondicionada. Para el resto, la frase más genérica
-  // de "revisado antes de publicar" ya estaba y sigue siendo cierta siempre.
-  const refurbLine =
-    input.condition && /refurbished/i.test(input.condition)
-      ? "🛡️ Profesionalmente reacondicionado."
-      : "✅ Revisado y probado antes de publicar.";
-
   const lines = [
-    AUDIENCE_COPY[input.audience].bullet,
+    `🟦 ${headline.title}: ${input.modelLine}`,
+    `${headline.intro}${cpuSentence}`,
+    `🔹 Estado: ${conditionSentence(input.condition)}`,
+    "🔹 Especificaciones técnicas:",
     "",
-    input.modelLine,
-    conditionHeadline(input.condition),
     ...specLines,
-    refurbLine,
-    "🚚 Envíos a todo el Perú.",
-    input.hasCharger ? "Incluye cargador." : "Sin cargador (revisar la publicación original).",
-    "🛡️ Garantía de 6 meses por defectos de fábrica.",
     "",
-    "Visitanos en",
-    STORE_URL,
+    "🔹 Control de calidad REVOLT:",
+    QUALITY_BLOCK,
     "",
-    STORE_SIGNATURE,
-    "",
-    "Escribime y coordinamos 🙂",
+    input.hasCharger ? "* 📦 Accesorios: Incluye cargador." : "* 📦 Accesorios: Cargador no incluido (consultar).",
+    LOGISTICS_LINE,
+    SOFTWARE_LINE,
   ];
   return lines.join("\n");
 }
@@ -236,7 +345,6 @@ export const ruleBasedMarketingCopy: MarketingCopyGenerator = {
     const ram = extractRamGb(text);
     const storageGb = extractStorageGb(text);
     const battery = extractBatteryPercent(text);
-    const cpuSimplified = simplifyCpu(input.cpuLabel);
     const screenAspect = input.aspects.find((a) => SCREEN_SIZE_ASPECT_RE.test(a.name));
 
     return {
@@ -245,7 +353,8 @@ export const ruleBasedMarketingCopy: MarketingCopyGenerator = {
         audience,
         modelLine: extractModelLine(input.title),
         condition: input.condition,
-        cpuSimplified,
+        cpuLabel: input.cpuLabel,
+        text,
         ram,
         storageGb,
         screenSize: screenAspect?.value ?? null,

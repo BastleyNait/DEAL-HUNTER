@@ -39,7 +39,10 @@ export class RevoltStorePublishTarget implements StorePublishTarget {
       verdict: null,
       specs: [],
       images: uploadedImages,
-      badges: [draft.conditionGrade],
+      // EN CAMINO: lo que se publica desde la Mesa de compra ya está comprado
+      // pero todavía no llegó. La tienda lo muestra como "En camino · llega en
+      // 10 a 15 días hábiles"; se desmarca en /admin cuando llega.
+      badges: [draft.conditionGrade, "EN CAMINO"],
       stock: 1,
       // Borrador: lo activás vos desde /admin después de revisarlo.
       isActive: false,

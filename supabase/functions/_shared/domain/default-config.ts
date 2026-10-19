@@ -358,6 +358,16 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    */
   scorePenalties: [
     {
+      // Todas las Dell, premium incluidas: llegaban demasiado arriba en el
+      // puntaje frente a Lenovo y HP. Se suma a la resta de Latitude común.
+      label: "Dell",
+      pattern: "\\b(?:dell|latitude|precision|xps|inspiron|vostro|alienware)\\b",
+      flags: "i",
+      points: 5,
+      scope: "title",
+      ignoreNegated: false,
+    },
+    {
       // Solo las Latitude comunes (3000/5000): las 7000/9000 son de gama alta
       // y no llegan maltratadas (ver DELL_PREMIUM_PATTERN).
       label: "Dell Latitude",

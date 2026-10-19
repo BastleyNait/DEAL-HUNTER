@@ -313,12 +313,15 @@ export function extractRamGb(text: string): number {
 
 const STORAGE_TB_RE = /\b(\d)\s?tb\b/i;
 const STORAGE_GB_RE = /(\d{3,4})\s?gb\s*(ssd|hdd|nvme|storage)?/i;
+// Sin "GB": "256SSD", "512 NVMe". Solo capacidades reales de disco, para no
+// confundir un número de modelo con almacenamiento.
+const STORAGE_BARE_RE = /\b(120|128|240|250|256|480|500|512|960|1000|2000)\s?(?:ssd|nvme|m\.?2)\b/i;
 
 /** Devuelve los GB de almacenamiento mencionados (1TB -> 1000), o 0 si no se detecta. */
 export function extractStorageGb(text: string): number {
   const tbMatch = text.match(STORAGE_TB_RE);
   if (tbMatch) return Number(tbMatch[1]) * 1000;
-  const gbMatch = text.match(STORAGE_GB_RE);
+  const gbMatch = text.match(STORAGE_GB_RE) ?? text.match(STORAGE_BARE_RE);
   const gb = gbMatch ? Number(gbMatch[1]) : 0;
   return Number.isNaN(gb) ? 0 : gb;
 }
