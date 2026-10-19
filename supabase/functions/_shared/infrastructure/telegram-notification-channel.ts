@@ -2,6 +2,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { EvaluatedDeal, NotificationChannel } from "../domain/types.ts";
 import { needsBatteryGradeReview } from "../domain/hardware-signals.ts";
 import { getApprovedChatIds } from "./telegram-recipients.ts";
+import { dealKeyboard, recordAlertMessages } from "./telegram-deal-reactions.ts";
 
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -107,12 +108,19 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 export class TelegramNotificationChannel implements NotificationChannel {
   constructor(private readonly supabase: SupabaseClient) {}
 
-  notify(deal: EvaluatedDeal): Promise<void> {
-    return this.send(formatMessage(deal), false);
+  /**
+   * La alerta va con los botones "🛒 La compro" / "👎 Paso", y se guarda qué
+   * mensaje le llegó a cada uno: cuando alguien toca un botón, telegram-webhook
+   * edita la alerta en el chat de todos.
+   */
+  async notify(deal: EvaluatedDeal): Promise<void> {
+    const text = formatMessage(deal);
+    const sent = await this.send(text, false, dealKeyboard(deal.itemId));
+    await recordAlertMessages(this.supabase, deal.itemId, text, sent);
   }
 
-  notifyDigest(deals: EvaluatedDeal[]): Promise<void> {
-    return this.send(formatDigest(deals), true);
+  async notifyDigest(deals: EvaluatedDeal[]): Promise<void> {
+    await this.send(formatDigest(deals), true);
   }
 
   /**
@@ -123,16 +131,22 @@ export class TelegramNotificationChannel implements NotificationChannel {
    * reintente y les llegue duplicado en la próxima corrida. Solo se lanza si
    * a NINGÚN destinatario le llegó, que es el caso real de "esto no se avisó".
    */
-  private async send(text: string, disablePreview: boolean): Promise<void> {
+  private async send(
+    text: string,
+    disablePreview: boolean,
+    replyMarkup?: ReturnType<typeof dealKeyboard>,
+  ): Promise<{ chatId: string; messageId: number }[]> {
     const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const chatIds = await getApprovedChatIds(this.supabase);
 
     if (!token || chatIds.length === 0) {
       console.warn("TELEGRAM_BOT_TOKEN sin configurar o ningún destinatario aprobado, se omite notificación.");
-      return;
+      return [];
     }
 
-    const results = await Promise.allSettled(chatIds.map((chatId) => this.sendTo(token, chatId, text, disablePreview)));
+    const results = await Promise.allSettled(
+      chatIds.map((chatId) => this.sendTo(token, chatId, text, disablePreview, replyMarkup)),
+    );
 
     const failures = results
       .map((r, i) => ({ r, chatId: chatIds[i] }))
@@ -144,9 +158,20 @@ export class TelegramNotificationChannel implements NotificationChannel {
     if (failures.length === results.length) {
       throw new Error(`Telegram sendMessage falló para los ${results.length} destinatario(s).`);
     }
+
+    return results
+      .map((r, i) => (r.status === "fulfilled" ? { chatId: chatIds[i], messageId: r.value } : null))
+      .filter((x): x is { chatId: string; messageId: number } => x !== null);
   }
 
-  private async sendTo(token: string, chatId: string, text: string, disablePreview: boolean): Promise<void> {
+  /** Devuelve el id del mensaje enviado, para poder editarlo después. */
+  private async sendTo(
+    token: string,
+    chatId: string,
+    text: string,
+    disablePreview: boolean,
+    replyMarkup?: ReturnType<typeof dealKeyboard>,
+  ): Promise<number> {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -155,10 +180,13 @@ export class TelegramNotificationChannel implements NotificationChannel {
         text,
         parse_mode: "HTML",
         disable_web_page_preview: disablePreview,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       }),
     });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     }
+    const json = (await res.json()) as { result?: { message_id?: number } };
+    return json.result?.message_id ?? 0;
   }
 }

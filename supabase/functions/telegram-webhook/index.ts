@@ -2,6 +2,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ensureBootstrapped, getOwnerChatId } from "../_shared/infrastructure/telegram-recipients.ts";
 import { escapeHtml } from "../_shared/infrastructure/telegram-notification-channel.ts";
+import {
+  dealKeyboard,
+  reactionFooter,
+  type DealReaction,
+  type ReactionRow,
+} from "../_shared/infrastructure/telegram-deal-reactions.ts";
 
 /**
  * Recibe los mensajes que le llegan al bot y los botones que se tocan
@@ -34,7 +40,7 @@ interface TelegramMessage {
 }
 interface TelegramCallbackQuery {
   id: string;
-  from: { id: number };
+  from: { id: number; first_name?: string; last_name?: string };
   message?: { message_id: number; chat: TelegramChat };
   data?: string;
 }
@@ -131,6 +137,13 @@ const ACTION_TO_STATUS: Record<string, "approved" | "revoked"> = {
 };
 
 async function handleCallback(supabase: SupabaseClient, botToken: string, callback: TelegramCallbackQuery): Promise<void> {
+  // Los botones de las alertas los puede tocar cualquiera que recibe ofertas,
+  // no solo el dueño.
+  if (String(callback.data ?? "").startsWith("deal:")) {
+    await handleDealReaction(supabase, botToken, callback);
+    return;
+  }
+
   const ownerChatId = await getOwnerChatId(supabase);
   if (String(callback.from.id) !== ownerChatId) {
     await answerCallback(botToken, callback.id, "No autorizado.");
@@ -180,6 +193,85 @@ async function handleCallback(supabase: SupabaseClient, botToken: string, callba
     targetChatId,
     approved ? "✅ ¡Listo! Ya vas a recibir las ofertas por acá." : "Se desactivó tu acceso a los avisos de ofertas.",
   ).catch(() => {}); // Si la persona bloqueó el bot, no hay nada que hacerle acá.
+}
+
+/**
+ * "🛒 La compro" / "👎 Paso" en una alerta. Guarda la reacción (tocar el mismo
+ * botón otra vez la borra) y edita la alerta en el chat de todos los que la
+ * recibieron, para que se vea quién la está comprando. Solo uno puede estar
+ * comprando cada publicación: si otro ya la marcó, se avisa y no se pisa.
+ */
+async function handleDealReaction(
+  supabase: SupabaseClient,
+  botToken: string,
+  callback: TelegramCallbackQuery,
+): Promise<void> {
+  const [, action, ...rest] = String(callback.data).split(":");
+  const itemId = rest.join(":");
+  const reaction = action === "buy" || action === "skip" ? (action as DealReaction) : null;
+  const chatId = String(callback.from.id);
+  if (!reaction || !itemId) {
+    await answerCallback(botToken, callback.id);
+    return;
+  }
+
+  const { data: recipient } = await supabase
+    .from("telegram_recipients")
+    .select("status, name, is_owner")
+    .eq("chat_id", chatId)
+    .maybeSingle();
+  if (recipient?.status !== "approved") {
+    await answerCallback(botToken, callback.id, "Tu acceso a las ofertas no está activo.");
+    return;
+  }
+  // El nombre de Telegram de la persona; el dueño se sembró como "Dueño".
+  const name =
+    [callback.from.first_name, callback.from.last_name].filter(Boolean).join(" ") || recipient.name || "Alguien";
+
+  const { data: current } = await supabase.from("deal_reactions").select("chat_id, name, reaction").eq("item_id", itemId);
+  const reactions = (current ?? []) as ReactionRow[];
+  const mine = reactions.find((r) => r.chat_id === chatId);
+  const buyer = reactions.find((r) => r.reaction === "buy");
+
+  let notice: string;
+  if (mine?.reaction === reaction) {
+    // Mismo botón otra vez: deshacer.
+    await supabase.from("deal_reactions").delete().eq("item_id", itemId).eq("chat_id", chatId);
+    notice = reaction === "buy" ? "Listo, ya no figura que la comprás." : "Quitado.";
+  } else if (reaction === "buy" && buyer && buyer.chat_id !== chatId) {
+    await answerCallback(botToken, callback.id, `Ya la está comprando ${buyer.name ?? "otra persona"}.`);
+    return;
+  } else {
+    const { error } = await supabase
+      .from("deal_reactions")
+      .upsert({ item_id: itemId, chat_id: chatId, name, reaction, reacted_at: new Date().toISOString() }, { onConflict: "item_id,chat_id" });
+    if (error) {
+      // El índice único de comprador: otro la marcó en el mismo instante.
+      await answerCallback(botToken, callback.id, "Otra persona la acaba de marcar. Mirá el mensaje.");
+      return;
+    }
+    notice = reaction === "buy" ? "🛒 Marcado: la estás comprando. Les avisé a los demás." : "👎 Marcado: pasás de esta.";
+  }
+
+  await answerCallback(botToken, callback.id, notice);
+  await refreshAlertMessages(supabase, botToken, itemId);
+}
+
+/** Vuelve a dibujar la alerta en el chat de todos, con el pie de quién reaccionó. */
+async function refreshAlertMessages(supabase: SupabaseClient, botToken: string, itemId: string): Promise<void> {
+  const [{ data: messages }, { data: reactions }] = await Promise.all([
+    supabase.from("telegram_alert_messages").select("chat_id, message_id, text").eq("item_id", itemId),
+    supabase.from("deal_reactions").select("chat_id, name, reaction").eq("item_id", itemId).order("reacted_at"),
+  ]);
+  const footer = reactionFooter((reactions ?? []) as ReactionRow[]);
+  await Promise.allSettled(
+    (messages ?? []).map((m) =>
+      editMessage(botToken, m.chat_id, Number(m.message_id), `${m.text}${footer}`, dealKeyboard(itemId)).catch((err) =>
+        // "message is not modified" o un chat que bloqueó el bot: no hay nada que hacer.
+        console.error(`No se pudo editar la alerta ${itemId} en ${m.chat_id}:`, err),
+      )
+    ),
+  );
 }
 
 /** Panel de control: un botón de acción por cada persona que alguna vez pidió acceso. */

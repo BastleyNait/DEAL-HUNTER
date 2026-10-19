@@ -4,6 +4,7 @@ import {
   declaresUnitFailure,
   declaresMissingRam,
   declaresSevereCrack,
+  findScreenOrKeyboardDefect,
   extractBatteryPercent,
   extractStorageGb,
   mentionsNoStorage,
@@ -134,6 +135,19 @@ function crackedRule(): ExclusionRule {
   };
 }
 
+/** Pantalla mala o teclas faltantes dichas en la descripción (ver findScreenOrKeyboardDefect). */
+function screenOrKeyboardDefectRule(): ExclusionRule {
+  return {
+    id: "screen_or_keyboard_defect",
+    evaluate(listing: ListingDetail) {
+      return {
+        excluded: findScreenOrKeyboardDefect(listing.descriptionText) !== null,
+        reason: "screen_or_keyboard_defect",
+      };
+    },
+  };
+}
+
 /**
  * Sin almacenamiento. Es regla de código y no un patrón de config porque cruza
  * dos señales: que el texto diga "no HD/HDD/SSD/disco" Y que además no aparezca
@@ -222,6 +236,7 @@ export function createExclusionRules(config: SearchConfig, lenientUrgent = false
     unitFailureRule(),
     missingRamRule(),
     crackedRule(),
+    screenOrKeyboardDefectRule(),
     implausiblePriceRule(config),
     missingStorageRule(),
     batteryThresholdRule(config),

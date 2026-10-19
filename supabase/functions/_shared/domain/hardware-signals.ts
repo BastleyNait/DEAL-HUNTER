@@ -220,7 +220,9 @@ const SEVERE_CRACK_RE = new RegExp(
 // "Grade C: Cracked Screen – the screen on the device will be cracked" es esa
 // laptop, aunque diga "Grade".
 const SEVERE_IGNORE_RE =
-  /return|refund|warrant|guarant|polic|\bif\b|\bmay\b|\bmight\b|\bcould\b|possible|\bunless\b|exclud|expect|not\s+limited|such\s+as/i;
+  // "like" cubre las enumeraciones negadas: "does not have any major defects
+  // like lines in the LCD".
+  /return|refund|warrant|guarant|polic|\bif\b|\bmay\b|\bmight\b|\bcould\b|possible|\bunless\b|exclud|expect|not\s+limited|such\s+as|\blike\b/i;
 
 /** La frase que dice que la pantalla o la bisagra está rajada o rota, o null. */
 export function findSevereCrack(text: string): string | null {
@@ -229,6 +231,28 @@ export function findSevereCrack(text: string): string | null {
 
 export function declaresSevereCrack(text: string): boolean {
   return findSevereCrack(text) !== null;
+}
+
+/**
+ * Pantalla mala o teclado incompleto dicho en la descripción. En el título ya
+ * lo cubren screen_defect y keyboard_defect, pero el vendedor lo escribe casi
+ * siempre abajo: "Laptop has bad screen" (salió como alerta de 82 puntos),
+ * "The LCD and screen are in poor condition with dents, scratches, missing
+ * keys" (86 puntos). Los píxeles muertos no están: aparecen en casi todas las
+ * leyendas de grado ("may have dead pixels", "up to 2 dead pixel").
+ */
+const SCREEN_OR_KEYBOARD_DEFECT_RE = new RegExp(
+  "\\b(?:bad|poor|faulty|defective|damaged|dead|dim|blurry)\\s+(?:lcd\\s+|led\\s+)?(?:screen|lcd|display|panel)\\b" +
+    "|\\b(?:screen|lcd|display|panel)s?\\s+(?:is\\s+|are\\s+|has\\s+|have\\s+)?(?:bad|faulty|defective|dead|not\\s+working|flicker\\w*|blank|black|dim)\\b" +
+    "|\\b(?:screen|lcd|display|panel)s?\\b[^.!?\\n|•]{0,30}?\\b(?:is|are)\\s+in\\s+(?:poor|bad|rough)\\s+(?:condition|shape)" +
+    "|\\blines?\\s+(?:on|across|in|through)\\s+(?:the\\s+)?(?:screen|lcd|display)\\b|\\b(?:vertical|horizontal)\\s+lines?\\b" +
+    "|\\bmissing\\s+(?:keys?|keycaps?)\\b|\\bkeys?\\s+(?:are\\s+|is\\s+)?missing\\b",
+  "i",
+);
+
+/** La frase que dice que la pantalla está mala o que faltan teclas, o null. */
+export function findScreenOrKeyboardDefect(text: string): string | null {
+  return findOutsideContext(text, SCREEN_OR_KEYBOARD_DEFECT_RE, SEVERE_IGNORE_RE, { lookback: false });
 }
 
 // Detalles que se aceptan si son chicos, pero hay que verlos en las fotos.
