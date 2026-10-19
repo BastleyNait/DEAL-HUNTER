@@ -338,6 +338,18 @@ export interface HighSpecExceptionConfig {
   minStorageGb: number;
 }
 
+/**
+ * Tope de precio propio de una marca, mayor que `maxPriceUsd`: las ThinkPad se
+ * revenden mejor y en eBay casi nunca bajan de $200. Se reconoce por el título.
+ */
+export interface BrandPriceCapConfig {
+  label: string;
+  pattern: string;
+  flags: string;
+  /** Tope inclusive. */
+  maxPriceUsd: number;
+}
+
 export interface ExcludePatternConfig {
   reason: string;
   pattern: string;
@@ -474,6 +486,8 @@ export interface SearchConfig {
   urgentDeal: UrgentDealConfig;
   /** Hasta qué precio se acepta una de mucha RAM y mucho disco (ver HighSpecExceptionConfig). */
   highSpecException: HighSpecExceptionConfig;
+  /** Marcas con tope de precio propio (ver BrandPriceCapConfig). */
+  brandPriceCaps: BrandPriceCapConfig[];
   /**
    * Vetas que corren en TODAS las corridas, ordenadas por recién publicado:
    * por número de modelo de CPU, que es como titulan casi todos. Son las que

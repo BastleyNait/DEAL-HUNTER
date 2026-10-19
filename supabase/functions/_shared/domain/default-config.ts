@@ -29,7 +29,7 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   maxPriceUsd: 200,
   minFixedPriceUsd: 25,
   minSellerFeedbackScore: 1000,
-  minSellerFeedbackPercentage: 95,
+  minSellerFeedbackPercentage: 98,
   // Reacondicionados (2000/2500) con "Best Offer" habilitado pueden listar hasta
   // acá: la idea es ofertar y bajar el precio final a <= maxPriceUsd antes de
   // comprar. Ver rules/exclusion-rules.ts -> priceEligibilityRule.
@@ -260,6 +260,13 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     minRamGb: 16,
     minStorageGb: 1000,
   },
+  /**
+   * Lenovo hasta $220: es lo que más se busca para revender, y en eBay las
+   * ThinkPad casi nunca bajan de $200. Medido en 14 días: 68 Lenovo de compra
+   * directa entre $200 y $220 se descartaban por precio (T14s i7 16GB/512GB a
+   * $205, T14 Ryzen 7 PRO 16GB/512GB a $220...).
+   */
+  brandPriceCaps: [{ label: "Lenovo", pattern: "\\b(?:lenovo|thinkpad|think\\s*pad|thinkbook)\\b", flags: "i", maxPriceUsd: 220 }],
   /**
    * Se escapaban publicaciones buenas. Auditado contra eBay en vivo (468
    * publicaciones de 48 h con las CPUs buscadas): 48 tenían una CPU que el
