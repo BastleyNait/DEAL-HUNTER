@@ -7,6 +7,7 @@ import { SupabasePublicationRepository } from "../_shared/infrastructure/supabas
 import { RevoltStorePublishTarget } from "../_shared/infrastructure/revolt-store-publish-target.ts";
 import type { PublicationRepository, StorePublishTarget } from "../_shared/domain/types.ts";
 import { legacyIdFromUrl, recordPurchase } from "../_shared/infrastructure/purchases.ts";
+import { marketplaceTitle, storeDescriptionToText } from "../_shared/domain/marketplace-text.ts";
 
 // Se llama desde el navegador (el dashboard, sin login), a diferencia de
 // hunt-deals que solo lo llama el cron. Por eso lleva CORS y un secreto propio
@@ -43,22 +44,46 @@ const NULL_PUBLICATION_REPOSITORY: PublicationRepository = {
   },
 };
 
+/**
+ * El publicador manda su propia key (la de su .env), que puede no ser
+ * idéntica a la que ve esta función (key legacy vs. nueva del mismo
+ * proyecto). En vez de comparar strings, se la usa: publications no tiene
+ * policies para anon, así que solo una service role válida de este proyecto
+ * puede leer esa fila.
+ */
+async function canReadPublication(req: Request, itemId: unknown): Promise<boolean> {
+  const key = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  if (!key || typeof itemId !== "string" || !itemId) return false;
+  const { data, error } = await createClient(Deno.env.get("SUPABASE_URL")!, key, {
+    auth: { persistSession: false },
+  })
+    .from("publications")
+    .select("item_id")
+    .eq("item_id", itemId)
+    .maybeSingle();
+  return !error && !!data;
+}
+
 // Composition root: arma eBay + Supabase + REVOLT-LAP y los inyecta en
 // PublishService. Un canal nuevo (Facebook vía el worker local, o cualquier
 // otro) no toca este archivo salvo para cablear un StorePublishTarget más.
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
 
-  const publishToken = Deno.env.get("PUBLISH_TOKEN");
-  if (!publishToken || req.headers.get("x-publish-token") !== publishToken) {
-    return json({ error: "Unauthorized" }, 401);
-  }
-
   let body: { action?: string; [key: string]: unknown };
   try {
     body = await req.json();
   } catch {
     return json({ error: "Body inválido, se espera JSON." }, 400);
+  }
+
+  // El dashboard se identifica con PUBLISH_TOKEN. El publicador de Facebook
+  // (tu PC) ya tiene una service role para leer la cola, así que con esa
+  // misma puede pedir el texto fresco de la tienda — y solo eso.
+  const publishToken = Deno.env.get("PUBLISH_TOKEN");
+  const fromDashboard = !!publishToken && req.headers.get("x-publish-token") === publishToken;
+  if (!fromDashboard && !(body.action === "facebook-sync" && (await canReadPublication(req, body.itemId)))) {
+    return json({ error: "Unauthorized" }, 401);
   }
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -150,6 +175,58 @@ Deno.serve(async (req) => {
   const storeAdminPassword = Deno.env.get("REVOLT_STORE_ADMIN_PASSWORD");
   if (!storeBaseUrl || !storeAdminPassword) {
     return json({ error: "Faltan REVOLT_STORE_BASE_URL / REVOLT_STORE_ADMIN_PASSWORD en las secrets." }, 500);
+  }
+
+  // Justo antes de postear en Facebook, el publicador pide el producto tal
+  // como quedó en REVOLT-LAP: lo que se corrigió en /admin (título, texto,
+  // precio, orden de fotos) es lo que sale en Marketplace, no el borrador
+  // que se mandó la primera vez. Se guarda también en publications, así la
+  // cola del dashboard muestra el título vigente.
+  if (body.action === "facebook-sync") {
+    try {
+      const itemId = String(body.itemId ?? "");
+      const { data: row, error } = await supabase
+        .from("publications")
+        .select("store_product_id")
+        .eq("item_id", itemId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!row) return json({ error: "Esa publicación no existe." }, 404);
+      // Publicaciones viejas sin producto en la tienda: se postean como están.
+      if (!row.store_product_id) return json({ data: null });
+
+      const product = await new RevoltStorePublishTarget(storeBaseUrl, storeAdminPassword).fetchProduct(
+        row.store_product_id,
+      );
+      if (!product) {
+        return json({ error: "El producto ya no existe en revolt-laptops.com (¿lo borraste en /admin?)." }, 404);
+      }
+
+      // Un campo vacío en la tienda no deja el aviso sin texto ni sin fotos:
+      // ahí se queda lo que ya estaba.
+      const fresh: Record<string, unknown> = { title: marketplaceTitle(product.name), store_slug: product.slug };
+      const description = storeDescriptionToText(product.description);
+      if (description) fresh.description = description;
+      if (product.images?.length) fresh.image_urls = product.images;
+      // Facebook cobra en soles; si en la tienda quedó en otra moneda se
+      // respeta el precio en soles que ya estaba.
+      if (product.currency === "PEN" && Number(product.price) > 0) fresh.price_pen = Number(product.price);
+
+      const { error: saveError } = await supabase.from("publications").update(fresh).eq("item_id", itemId);
+      if (saveError) throw new Error(saveError.message);
+
+      return json({
+        data: {
+          title: fresh.title,
+          description: fresh.description ?? null,
+          imageUrls: fresh.image_urls ?? null,
+          pricePen: fresh.price_pen ?? null,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
   }
 
   const service = new PublishService(

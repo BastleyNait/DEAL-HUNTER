@@ -1,5 +1,16 @@
 import type { PublishDraft, StorePublishResult, StorePublishTarget } from "../domain/types.ts";
 
+/** Lo que devuelve GET /api/products/:id de REVOLT-LAP (solo los campos que usamos). */
+export interface StoreProduct {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  images: string[];
+}
+
 /**
  * Adaptador HTTP contra la API admin de REVOLT-LAP (Next.js + Supabase, repo
  * aparte). No hay nada que tocar de ese lado: /api/upload y /api/products ya
@@ -63,6 +74,23 @@ export class RevoltStorePublishTarget implements StorePublishTarget {
 
     const json = (await res.json()) as { data: { id: string; slug: string } };
     return { productId: json.data.id, slug: json.data.slug };
+  }
+
+  /**
+   * El producto tal como está hoy en la tienda, con lo que se haya editado en
+   * /admin después de publicarlo (incluidos los borradores sin activar). null
+   * si ya no existe.
+   */
+  async fetchProduct(productId: string): Promise<StoreProduct | null> {
+    const res = await fetch(`${this.baseUrl}/api/products/${encodeURIComponent(productId)}`, {
+      headers: { "x-admin-password": this.adminPassword },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw new Error(`REVOLT-LAP /api/products/${productId} error ${res.status}: ${await res.text()}`);
+    }
+    const json = (await res.json()) as { data: StoreProduct };
+    return json.data;
   }
 
   /**
