@@ -1,5 +1,6 @@
 import type { ListingAspect, ModelTierConfig } from "./types.ts";
 import { extractBatteryPercent, extractRamGb, extractStorageGb } from "./hardware-signals.ts";
+import { type DedicatedGpu, detectDedicatedGpu, isDesignGrade } from "./dedicated-gpu.ts";
 
 /**
  * El título y la descripción que trae eBay están escritos para que el
@@ -82,9 +83,16 @@ const AUDIENCE_COPY: Record<Audience, { hook: string; bullet: string }> = {
  * que armaste a mano para la ThinkPad E14 Gen 2: primero a quién está
  * dirigida, después por qué el procesador la hace buena para eso.
  */
-type Headline = "highEnd" | "convertible" | "portable" | "business" | "everyday";
+type Headline = "workstation" | "highEnd" | "convertible" | "portable" | "business" | "everyday";
 
 const HEADLINE_COPY: Record<Headline, { title: string; intro: string }> = {
+  // Con gráfica dedicada de 4GB+ o profesional: el comprador es otro (ver
+  // dedicated-gpu.ts), y el texto tiene que hablarle a él.
+  workstation: {
+    title: "Potencia Gráfica para Diseño e Ingeniería",
+    intro:
+      "Pensada para arquitectos, ingenieros, diseñadores y programadores: mueve con fluidez AutoCAD, Revit, SolidWorks, SketchUp, Photoshop, edición de video y entornos de desarrollo pesados.",
+  },
   highEnd: {
     title: "Rendimiento de Alta Gama",
     intro: "Diseñada para profesionales, programadores y estudiantes avanzados que requieren máxima velocidad en su día a día.",
@@ -110,7 +118,9 @@ const HEADLINE_COPY: Record<Headline, { title: string; intro: string }> = {
 };
 
 /** Alta gama si la línea es premium o el procesador es de la franja alta (i7 / Ryzen 7), como en tu ThinkPad E14 con i7. */
-function pickHeadline(audience: Audience, cpuLabel: string | null): Headline {
+function pickHeadline(audience: Audience, cpuLabel: string | null, gpu: DedicatedGpu | null): Headline {
+  // La gráfica dedicada manda sobre todo lo demás: es lo que más define para qué sirve.
+  if (isDesignGrade(gpu)) return "workstation";
   if (audience === "convertible") return "convertible";
   if (audience === "premium" || /\bi7\b|ryzen 7/i.test(cpuLabel ?? "")) return "highEnd";
   if (audience === "portable") return "portable";
@@ -214,10 +224,17 @@ export function storeConditionGrade(condition: string | null): string {
 
 const MAX_TITLE_LENGTH = 100; // Tope real de Facebook Marketplace.
 
-function buildTitle(brand: string, audience: Audience, ram: number, storageGb: number): string {
-  const hook = AUDIENCE_COPY[audience].hook;
+function buildTitle(brand: string, audience: Audience, ram: number, storageGb: number, gpu: DedicatedGpu | null): string {
+  const design = isDesignGrade(gpu);
+  const hook = design ? "para AutoCAD, diseño y programación" : AUDIENCE_COPY[audience].hook;
   const storage = storageGb >= 1000 ? `${Math.round(storageGb / 1000)}TB` : storageGb > 0 ? `${storageGb}GB` : "";
-  const specs = [ram > 0 ? `${ram}GB RAM` : null, storage ? `${storage} SSD` : null].filter(Boolean).join(", ");
+  const specs = [
+    ram > 0 ? `${ram}GB RAM` : null,
+    storage ? `${storage} SSD` : null,
+    design ? (gpu.vramGb ? `${gpu.vramGb}GB dedicada` : "gráfica dedicada") : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const parts = [`Laptop ${brand}`.trim(), hook, specs].filter((p) => p && p.length > 0);
   let title = parts.join(" — ");
@@ -239,7 +256,8 @@ function exactCpuModel(text: string): string | null {
  * i5/i7 de 11.ª y 12.ª de las series G7, U y P (no en todos los H), y Radeon
  * en los Ryzen con gráficos integrados de la serie U.
  */
-function graphicsPhrase(model: string | null): string {
+function graphicsPhrase(model: string | null, gpu: DedicatedGpu | null = null): string {
+  if (gpu) return `gráficos dedicados ${gpu.name}${gpu.vramGb ? ` de ${gpu.vramGb}GB` : ""}`;
   if (!model) return "gráficos integrados";
   if (/i[57]-11\d{2}G7|i[57]-12\d{2}[UP]\b/i.test(model)) return "gráficos integrados fluidos gracias a la tecnología Iris Xe";
   if (/Ryzen \d \d{4}U/i.test(model)) return "gráficos integrados Radeon";
@@ -254,6 +272,18 @@ function cpuInProse(cpuLabel: string | null): string | null {
   const amd = cpuLabel.match(/^AMD Ryzen (\d) (\d{3,4})$/i);
   if (amd) return `AMD Ryzen ${amd[1]} de la serie ${amd[2]}`;
   return simplifyCpu(cpuLabel);
+}
+
+/** Línea de la ficha para la gráfica dedicada: profesional (certificada) o de consumo. */
+function gpuLine(gpu: DedicatedGpu): string {
+  const name = `${gpu.name}${gpu.vramGb ? ` de ${gpu.vramGb}GB` : ""} dedicada`;
+  if (gpu.professional) {
+    return `* Tarjeta gráfica: ${name} – Línea profesional certificada para AutoCAD, Revit, SolidWorks y software de ingeniería.`;
+  }
+  if ((gpu.vramGb ?? 0) >= 4) {
+    return `* Tarjeta gráfica: ${name} – Ideal para AutoCAD, modelado 3D, render, edición de video y juegos.`;
+  }
+  return `* Tarjeta gráfica: ${name} – Un plus para edición de fotos, video y diseño ligero.`;
 }
 
 function cpuBenefit(cpuLabel: string | null): string {
@@ -280,7 +310,11 @@ function screenLine(screenSize: string | null, text: string): string | null {
   const size = screenSize?.match(/\d{2}(?:\.\d)?/)?.[0] ?? text.match(/\b(1[1-7](?:\.\d)?)\s?(?:"|”|''|in\b|inch|-inch|pulgadas)/i)?.[1];
   if (!size) return null;
   const fhd = /\b(?:fhd|full\s*hd|1920\s*x\s*1080|1080p)\b/i.test(text);
-  const touch = /\btouch(?:screen)?\b|táctil/i.test(text);
+  // "Touchscreen: No", "Touchscreen: Not detected", "Non-touch", "No touch"
+  // dicen justo lo contrario.
+  const touch =
+    /\btouch(?:screen)?\b|táctil/i.test(text) &&
+    !/non[\s-]?touch|\bno[\s-]+touch|touch\s*(?:screen)?\s*[:\-]\s*(?:no|none|n\/a|not)\b/i.test(text);
   const details = [fhd ? "Full HD" : null, touch ? "táctil" : null].filter(Boolean).join(" ");
   return `* Pantalla: ${size} pulgadas${details ? ` ${details}` : ""} – Definición óptima para extensas jornadas de trabajo.`;
 }
@@ -296,8 +330,9 @@ function buildDescription(input: {
   screenSize: string | null;
   batteryPct: number | null;
   hasCharger: boolean;
+  gpu: DedicatedGpu | null;
 }): string {
-  const headline = HEADLINE_COPY[pickHeadline(input.audience, input.cpuLabel)];
+  const headline = HEADLINE_COPY[pickHeadline(input.audience, input.cpuLabel, input.gpu)];
   const storage =
     input.storageGb >= 1000 ? `${Math.round(input.storageGb / 1000)}TB` : input.storageGb > 0 ? `${input.storageGb}GB` : null;
 
@@ -305,7 +340,7 @@ function buildDescription(input: {
   const ghz = input.text.match(/\b(\d\.\d{1,2})\s?ghz\b/i)?.[1];
   const prose = cpuInProse(input.cpuLabel);
   const cpuSentence = prose
-    ? ` Esta laptop destaca por su procesador ${prose}${ghz ? ` a ${ghz}GHz` : ""}${model ? ` (${model})` : ""}, una arquitectura optimizada para la multitarea exigente, la ejecución de software pesado y ${graphicsPhrase(model)}.`
+    ? ` Esta laptop destaca por su procesador ${prose}${ghz ? ` a ${ghz}GHz` : ""}${model ? ` (${model})` : ""}, una arquitectura optimizada para la multitarea exigente, la ejecución de software pesado y ${graphicsPhrase(model, input.gpu)}.`
     : "";
 
   const specLines = [
@@ -314,6 +349,7 @@ function buildDescription(input: {
     storage
       ? `* Almacenamiento: ${storage} SSD – Unidad de estado sólido para un arranque inmediato${input.storageGb >= 1000 ? " y espacio de sobra" : ""}.`
       : null,
+    input.gpu ? gpuLine(input.gpu) : null,
     screenLine(input.screenSize, input.text),
     input.batteryPct != null ? `* Batería: ${input.batteryPct}% de su capacidad original.` : null,
   ].filter((l): l is string => Boolean(l));
@@ -346,9 +382,10 @@ export const ruleBasedMarketingCopy: MarketingCopyGenerator = {
     const storageGb = extractStorageGb(text);
     const battery = extractBatteryPercent(text);
     const screenAspect = input.aspects.find((a) => SCREEN_SIZE_ASPECT_RE.test(a.name));
+    const gpu = detectDedicatedGpu(text, input.aspects);
 
     return {
-      title: buildTitle(brand, audience, ram, storageGb),
+      title: buildTitle(brand, audience, ram, storageGb, gpu),
       description: buildDescription({
         audience,
         modelLine: extractModelLine(input.title),
@@ -360,6 +397,7 @@ export const ruleBasedMarketingCopy: MarketingCopyGenerator = {
         screenSize: screenAspect?.value ?? null,
         batteryPct: battery,
         hasCharger: !NO_CHARGER_RE.test(text),
+        gpu,
       }),
     };
   },
