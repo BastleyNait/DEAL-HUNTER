@@ -568,6 +568,12 @@ export interface PublishDraft {
   storage: string | null;
   display: string | null;
   batteryHealth: string | null;
+  /**
+   * Gráfica dedicada ("NVIDIA Quadro P620 4GB"), o null si es integrada. Va a
+   * la tienda como especificación "GPU": la tarjeta del catálogo la muestra en
+   * su propia fila y la ficha como "Tarjeta gráfica".
+   */
+  gpu: string | null;
 }
 
 export interface StorePublishResult {

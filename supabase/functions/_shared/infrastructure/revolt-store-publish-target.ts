@@ -37,7 +37,9 @@ export class RevoltStorePublishTarget implements StorePublishTarget {
       batteryHealth: draft.batteryHealth,
       description: draft.description,
       verdict: null,
-      specs: [],
+      // La gráfica dedicada va como especificación "GPU": REVOLT-LAP la muestra
+      // en la tarjeta del catálogo y como "Tarjeta gráfica" en la ficha.
+      specs: draft.gpu ? [{ label: "GPU", value: draft.gpu }] : [],
       images: uploadedImages,
       // EN CAMINO: lo que se publica desde la Mesa de compra ya está comprado
       // pero todavía no llegó. La tienda lo muestra como "En camino · llega en

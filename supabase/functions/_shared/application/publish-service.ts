@@ -18,6 +18,7 @@ import {
 } from "../domain/marketing-copy.ts";
 import { computeSalePriceUsd } from "../domain/pricing.ts";
 import { extractBatteryPercent, extractRamGb, extractStorageGb } from "../domain/hardware-signals.ts";
+import { detectDedicatedGpu } from "../domain/dedicated-gpu.ts";
 
 /**
  * Orquesta "de un link de eBay a una publicación en la tienda", en dos pasos
@@ -99,6 +100,7 @@ export class PublishService {
     const storageGb = extractStorageGb(text);
     const battery = extractBatteryPercent(text);
     const screenAspect = detail.aspects.find((a) => /screen size/i.test(a.name));
+    const gpu = detectDedicatedGpu(text, detail.aspects);
 
     const draft: PublishDraft = {
       itemId: input.itemId,
@@ -117,6 +119,7 @@ export class PublishService {
       storage: storageGb > 0 ? (storageGb >= 1000 ? `${Math.round(storageGb / 1000)}TB` : `${storageGb}GB`) : null,
       display: screenAspect?.value ?? null,
       batteryHealth: battery != null ? `${battery}%` : null,
+      gpu: gpu ? `${gpu.name}${gpu.vramGb ? ` ${gpu.vramGb}GB` : ""}` : null,
     };
 
     const result = await this.storeTarget.publish(draft);
