@@ -177,6 +177,87 @@ Deno.serve(async (req) => {
     return json({ error: "Faltan REVOLT_STORE_BASE_URL / REVOLT_STORE_ADMIN_PASSWORD en las secrets." }, 500);
   }
 
+  // Catálogo de la tienda para el panel de Facebook del dashboard: todas las
+  // laptops de revolt-laptops.com, con foto y precio, para poder distinguirlas.
+  // Se lee de la tienda en cada apertura del panel (no se cachea), así que
+  // refleja lo último que se editó en /admin.
+  if (body.action === "store-catalog") {
+    try {
+      const products = await new RevoltStorePublishTarget(storeBaseUrl, storeAdminPassword).listProducts();
+      return json({
+        data: products.map((p) => ({
+          productId: p.id,
+          slug: p.slug,
+          name: p.name,
+          price: Number(p.price),
+          currency: p.currency,
+          image: p.images?.[0] ?? null,
+          photos: p.images?.length ?? 0,
+          stock: p.stock ?? 0,
+          brand: p.brand ?? null,
+          processor: p.processor ?? null,
+          ram: p.ram ?? null,
+          storage: p.storage ?? null,
+          isActive: p.isActive !== false,
+          inTransit: (p.badges ?? []).some((b) => b.trim().toUpperCase() === "EN CAMINO"),
+        })),
+      });
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  }
+
+  // Encola para Facebook una laptop que está en la tienda aunque nunca haya
+  // pasado por la Mesa de compra (la cargaste directo en /admin): se le crea
+  // su fila en publications con id "revolt|<producto>" y, igual que las demás,
+  // el publicador la rellena con lo que diga la tienda al momento de postear.
+  if (body.action === "facebook-queue-store") {
+    try {
+      const productId = String(body.productId ?? "");
+      const store = new RevoltStorePublishTarget(storeBaseUrl, storeAdminPassword);
+      const product = await store.fetchProduct(productId);
+      if (!product) return json({ error: "Esa laptop ya no está en la tienda." }, 404);
+
+      const repository = new SupabasePublicationRepository(supabase);
+      const { data: existing, error: findError } = await supabase
+        .from("publications")
+        .select("item_id")
+        .eq("store_product_id", productId)
+        .maybeSingle();
+      if (findError) throw new Error(findError.message);
+
+      let itemId = existing?.item_id as string | undefined;
+      if (!itemId) {
+        itemId = `revolt|${productId}`;
+        const rate = 3.7;
+        const pricePen = product.currency === "PEN" ? Number(product.price) : Number(product.price) * rate;
+        const { error: insertError } = await supabase.from("publications").insert({
+          item_id: itemId,
+          ebay_url: `${storeBaseUrl.replace(/\/$/, "")}/laptops/${product.slug}`,
+          title: marketplaceTitle(product.name),
+          description: storeDescriptionToText(product.description) || product.name,
+          price_usd: Math.round((pricePen / rate) * 100) / 100,
+          price_pen: pricePen,
+          cost_usd: 0,
+          currency: "USD",
+          image_urls: product.images ?? [],
+          store_product_id: productId,
+          store_slug: product.slug,
+          store_published_at: new Date().toISOString(),
+          facebook_status: "none",
+        });
+        if (insertError) throw new Error(insertError.message);
+      }
+
+      const queued = await repository.queueForFacebook([itemId]);
+      return json({ data: { queued, itemId } });
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  }
+
   // Justo antes de postear en Facebook, el publicador pide el producto tal
   // como quedó en REVOLT-LAP: lo que se corrigió en /admin (título, texto,
   // precio, orden de fotos) es lo que sale en Marketplace, no el borrador

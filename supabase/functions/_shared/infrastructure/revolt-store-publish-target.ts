@@ -9,6 +9,13 @@ export interface StoreProduct {
   price: number;
   currency: string;
   images: string[];
+  stock?: number;
+  brand?: string;
+  processor?: string | null;
+  ram?: string | null;
+  storage?: string | null;
+  isActive?: boolean;
+  badges?: string[];
 }
 
 /**
@@ -91,6 +98,15 @@ export class RevoltStorePublishTarget implements StorePublishTarget {
     }
     const json = (await res.json()) as { data: StoreProduct };
     return json.data;
+  }
+
+  /** Todo el inventario de la tienda (activas y borradores), el mismo listado que ve /admin. */
+  async listProducts(): Promise<StoreProduct[]> {
+    const res = await fetch(`${this.baseUrl}/api/products?all=true`, {
+      headers: { "x-admin-password": this.adminPassword },
+    });
+    if (!res.ok) throw new Error(`REVOLT-LAP /api/products error ${res.status}: ${await res.text()}`);
+    return ((await res.json()) as { data: StoreProduct[] }).data;
   }
 
   /**
