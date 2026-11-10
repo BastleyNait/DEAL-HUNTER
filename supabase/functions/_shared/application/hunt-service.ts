@@ -74,10 +74,12 @@ function promiseOf(candidate: Candidate, config: SearchConfig, urgentMatcher: Ur
   // candidatos: es lo que más importa, y las de $200-220 solo existen por ella.
   if (urgentMatcher.isUrgent(asPreScreenListing(candidate.summary), { lenient: true })) promise += 2000;
 
-  // Una con gráfica dedicada tampoco: es la que más margen deja. La de diseño
-  // (Quadro, RTX A, 4GB o más) casi al nivel de una urgente.
-  const gpu = gpuOf(candidate.summary);
-  if (gpu) promise += isDesignGrade(gpu) ? 1500 : 300;
+  // La de gráfica de diseño (Quadro, RTX A, 4GB o más) tampoco: es la que más
+  // margen deja, casi al nivel de una urgente, y además tiene cupo propio (ver
+  // GPU_EXTRA_CANDIDATES). Una dedicada común (MX, GTX chica) NO sube acá: usaría
+  // el cupo de siempre y desplazaría a candidatos que antes se evaluaban; solo
+  // suma el bono de puntaje.
+  if (isDesignGrade(gpuOf(candidate.summary))) promise += 1500;
 
   // Una especial nunca puede quedar afuera por el tope de candidatos por
   // corrida: es justo lo que se está buscando (llegan ~10 por día).
