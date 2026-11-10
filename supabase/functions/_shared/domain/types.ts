@@ -434,6 +434,13 @@ export interface SearchConfig {
   refurbishedExceptionMaxPrice: number;
   refurbishedConditionIds: number[];
   greatDealMinScore: number;
+  /**
+   * Segundo camino a OFERTAZA, para lo muy barato: una de 16GB o más a este
+   * precio o menos es ofertaza con un puntaje menor (no hace falta llegar a
+   * greatDealMinScore). Ejemplo real: una ThinkPad L13 Yoga 2 en 1 de 16GB a
+   * $130 (que se negoció a $119) puntúa 73.
+   */
+  cheapGreatDeal: { maxPriceUsd: number; minRamGb: number; minScore: number };
   includedConditionIds: number[];
   includeAuctions: boolean;
   /** Pool completo de vetas de búsqueda (editable en DB sin redeployar). */

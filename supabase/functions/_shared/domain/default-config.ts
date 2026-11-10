@@ -38,6 +38,7 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   refurbishedExceptionMaxPrice: 220,
   refurbishedConditionIds: [2000, 2010, 2020, 2030, 2500],
   greatDealMinScore: 80,
+  cheapGreatDeal: { maxPriceUsd: 130, minRamGb: 16, minScore: 70 },
   // Todos los condition IDs de eBay MENOS 7000 ("For parts or not working").
   // Importante: 2010/2020/2030 (Excellent/Very Good/Good - Refurbished), 2750
   // (Like New) y 1750 (New with defects) faltaban y eBay estaba filtrando esos

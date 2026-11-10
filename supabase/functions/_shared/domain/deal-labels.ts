@@ -13,7 +13,7 @@ import type { EvaluatedDeal } from "./types.ts";
  *   ⏰ SUBASTA          el aviso es porque está por cerrar
  *   🎮 GPU DEDICADA     gráfica de diseño: el mejor margen hasta ahora
  *   🔄 2 EN 1           el tipo especial que se busca a propósito
- *   🚨 OFERTAZA         puntaje alto (solo puntaje: el precio ya lo cubre el tope)
+ *   🚨 OFERTAZA         puntaje 80+, o 16GB+ a $130 o menos con 70+ (ver cheapGreatDeal)
  *   🔥 OFERTA           cualquier otra que pasó el filtro
  * "⭐ CPU prioritaria" nunca encabeza: es una propiedad, va como chip.
  */

@@ -2,6 +2,7 @@ import type { ListingDetail, ScoreFactor, ScoringContext, ScoringResult, Scoring
 import { createModelFactor, DEFAULT_SCORE_FACTORS } from "./factors.ts";
 import { createScorePenalties, penaltyPoints } from "./penalties.ts";
 import { gpuOf, gpuScoreBonus } from "../domain/gpu-priority.ts";
+import { extractRamGb } from "../domain/hardware-signals.ts";
 
 /**
  * Combina una lista de ScoreFactor pluggeable en un puntaje 0-100. Agregar un
@@ -35,9 +36,16 @@ export function createWeightedScoringStrategy(
       // no lo que vas a terminar pagando, así que no hay forma de afirmar que
       // sea una ganga. El puntaje se calcula igual para poder ordenarlas.
       const isAuction = listing.buyingOptions.includes("AUCTION");
-      // Solo por puntaje: el precio ya lo acota el tope general, y "barato" a
-      // secas dejaba pasar de ofertaza equipos flojos.
-      const isGreatDeal = !isAuction && score >= config.greatDealMinScore;
+      // Por puntaje, o por muy barato con 16GB o más: "barato" a secas dejaba
+      // pasar de ofertaza equipos flojos, pero 16GB a $130 es ofertaza aunque
+      // el puntaje quede en 70.
+      const cheap = config.cheapGreatDeal;
+      const isCheapGreat =
+        listing.price != null &&
+        listing.price <= cheap.maxPriceUsd &&
+        score >= cheap.minScore &&
+        extractRamGb(`${listing.title} ${listing.descriptionText}`) >= cheap.minRamGb;
+      const isGreatDeal = !isAuction && (score >= config.greatDealMinScore || isCheapGreat);
 
       return { score, isGreatDeal };
     },
