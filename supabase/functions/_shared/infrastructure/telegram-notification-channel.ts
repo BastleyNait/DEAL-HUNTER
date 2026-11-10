@@ -50,6 +50,11 @@ export function formatMessage(deal: EvaluatedDeal): string {
   if (missing.length > 0) {
     lines.push(`⚠️ ${missing.join(" · ")} — revisar la publicación antes de comprar`);
   }
+  // Gráfica dedicada: es para quien hace AutoCAD, render o video, y lo que más
+  // margen deja. Va como línea propia para que se vea sin abrir el link.
+  if (deal.gpu) {
+    lines.push(`🎮 GPU dedicada: ${escapeHtml(deal.gpu)}${deal.isGpuDesign ? " — equipo para diseño / AutoCAD" : ""}`);
+  }
   // Grieta o golpe que no descarta: lo que dijo el vendedor, para mirar las fotos.
   if (deal.cosmeticNote) {
     lines.push(`🔍 Revisar fotos — el vendedor dice: «${escapeHtml(deal.cosmeticNote)}»`);
@@ -84,6 +89,7 @@ function formatDigest(deals: EvaluatedDeal[]): string {
     const title = deal.title.length > 58 ? `${deal.title.slice(0, 57)}…` : deal.title;
     const tags = [
       deal.isUrgent ? "💰 URGENTE" : null,
+      deal.isGpuDesign ? "🎮 GPU" : null,
       deal.specialLabel && !deal.specialDemoted ? `🔄 ${deal.specialLabel}` : null,
       deal.cpuMatch,
       deal.isAuction ? "subasta" : null,

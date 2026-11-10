@@ -1,6 +1,7 @@
 import type { ListingDetail, ScoreFactor, ScoringContext, ScoringResult, ScoringStrategy, SearchConfig } from "../domain/types.ts";
 import { createModelFactor, DEFAULT_SCORE_FACTORS } from "./factors.ts";
 import { createScorePenalties, penaltyPoints } from "./penalties.ts";
+import { gpuOf, gpuScoreBonus } from "../domain/gpu-priority.ts";
 
 /**
  * Combina una lista de ScoreFactor pluggeable en un puntaje 0-100. Agregar un
@@ -23,7 +24,12 @@ export function createWeightedScoringStrategy(
       // Latitude que quedaba justo en el umbral deja de serlo.
       // Una penalización negativa suma (ej. "Incluye cargador"), así que se
       // acota también por arriba.
-      const score = Math.min(100, Math.max(0, Math.round(weighted * 100) - penaltyPoints(penalties, listing)));
+      // Y una gráfica dedicada suma: es el tipo de laptop que más margen deja.
+      const gpuBonus = gpuScoreBonus(gpuOf(listing), config.gpuPriority);
+      const score = Math.min(
+        100,
+        Math.max(0, Math.round(weighted * 100) - penaltyPoints(penalties, listing) + gpuBonus),
+      );
 
       // Una subasta nunca es "ofertaza": el precio que vemos es la puja actual,
       // no lo que vas a terminar pagando, así que no hay forma de afirmar que

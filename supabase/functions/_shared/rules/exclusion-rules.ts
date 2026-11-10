@@ -53,6 +53,23 @@ function sellerReputationRule(config: SearchConfig): ExclusionRule {
 }
 
 /**
+ * Solo se compra lo que sale de EE. UU. (el casillero está en Florida). El
+ * filtro de la búsqueda ya lo pide, pero el detalle y las publicaciones
+ * guardadas de antes pueden traer otro país. Sin dato de país no se descarta.
+ */
+function itemLocationRule(config: SearchConfig): ExclusionRule {
+  return {
+    id: "item_location",
+    evaluate(listing: ListingDetail) {
+      const wanted = config.itemLocationCountry;
+      if (!wanted || !listing.itemCountry) return { excluded: false };
+      if (listing.itemCountry.toUpperCase() === wanted.toUpperCase()) return { excluded: false };
+      return { excluded: true, reason: `ships_from_${listing.itemCountry.toLowerCase()}` };
+    },
+  };
+}
+
+/**
  * Reglas que miran solo el título: repuestos sueltos, equipos bloqueados y
  * defectos declarados (pantalla, teclado, golpes). Van contra el título y no
  * contra la descripción a propósito — ver el comentario de titleExcludePatterns
@@ -229,6 +246,7 @@ function priceEligibilityRule(config: SearchConfig, lenientUrgent: boolean): Exc
  */
 export function createExclusionRules(config: SearchConfig, lenientUrgent = false): ExclusionRule[] {
   return [
+    itemLocationRule(config),
     ...patternRules(config),
     ...titlePatternRules(config),
     sellerReputationRule(config),

@@ -25,6 +25,8 @@ export interface ListingSummary {
   sellerFeedbackPercentage: number | null;
   /** Cantidad de pujas. Null en publicaciones a precio fijo. */
   bidCount: number | null;
+  /** País desde donde se envía (código de 2 letras, "US", "CA"...). Null si eBay no lo dice. */
+  itemCountry: string | null;
 }
 
 /**
@@ -156,6 +158,10 @@ export interface EvaluatedDeal {
   isUrgent: boolean;
   /** Cumple la excepción de 16GB + 1TB (puede costar más que el tope general). */
   isHighSpec: boolean;
+  /** Gráfica dedicada ("NVIDIA Quadro P620 4GB"), o null si es integrada o no se sabe. */
+  gpu: string | null;
+  /** La gráfica sirve para diseño / AutoCAD (profesional, o 4GB o más): se avisa primero. */
+  isGpuDesign: boolean;
   /**
    * Lo que dijo el vendedor de una grieta, golpe o daño estético que no
    * descarta (no es la pantalla ni la bisagra), para revisar las fotos antes
@@ -296,6 +302,19 @@ export interface SpecialDealConfig {
    * venir rayadas o rotas.
    */
   demotePattern?: string | null;
+}
+
+/**
+ * Las laptops con gráfica dedicada dejan el mejor margen, así que van primero:
+ * suman puntos, encabezan los avisos y no se pierden por el umbral de puntaje.
+ */
+export interface GpuPriorityConfig {
+  /** Puntos que suma una gráfica de diseño (Quadro, RTX A, Radeon Pro, o 4GB o más). */
+  designGradeBonus: number;
+  /** Puntos que suma cualquier otra dedicada (MX250, GTX de 2 a 3GB). */
+  otherBonus: number;
+  /** Una de diseño se avisa aunque no supere notifyScoreAbove. */
+  alwaysNotifyDesignGrade: boolean;
 }
 
 /**
@@ -488,6 +507,20 @@ export interface SearchConfig {
   highSpecException: HighSpecExceptionConfig;
   /** Marcas con tope de precio propio (ver BrandPriceCapConfig). */
   brandPriceCaps: BrandPriceCapConfig[];
+  /** Cuánto pesa una gráfica dedicada en el puntaje y en el aviso (ver GpuPriorityConfig). */
+  gpuPriority: GpuPriorityConfig;
+  /**
+   * País desde donde tiene que enviarse lo que se compra (casillero en EE. UU.).
+   * Se filtra en la búsqueda de eBay y se vuelve a comprobar en cada
+   * publicación. Null = sin restricción.
+   */
+  itemLocationCountry: string | null;
+  /**
+   * Vetas de laptops con gráfica dedicada: corren en TODAS las corridas, como
+   * las de CPU. Una ThinkPad P15v con Quadro P620 dejó más de S/ 1.000 de
+   * ganancia, el mejor margen hasta ahora.
+   */
+  gpuSearchProfiles: SearchProfile[];
   /**
    * Vetas que corren en TODAS las corridas, ordenadas por recién publicado:
    * por número de modelo de CPU, que es como titulan casi todos. Son las que

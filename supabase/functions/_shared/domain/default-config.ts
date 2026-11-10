@@ -280,6 +280,37 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * cubren entre 8 y 130 horas de publicaciones, así que corriendo cada 15
    * minutos ninguna nueva se escapa. 5 llamadas por corrida, ~480 por día.
    */
+  // País de envío: todo lo que se compra sale de un casillero en EE. UU. Un
+  // vendedor de Canadá o Japón también aparecía (deliveryCountry solo pide que
+  // "envíe a" EE. UU.) y con el precio convertido a dólares parecía una ganga.
+  itemLocationCountry: "US",
+  /**
+   * Gráfica dedicada primero. La P15v (Quadro P620 4GB) dejó más de S/ 1.000
+   * de ganancia, el mejor margen hasta ahora. Una de diseño suma 12 puntos y
+   * se avisa aunque no llegue al umbral; una GeForce MX o GTX chica suma 6.
+   */
+  gpuPriority: {
+    designGradeBonus: 12,
+    otherBonus: 6,
+    alwaysNotifyDesignGrade: true,
+  },
+  /**
+   * Dos vetas por gráfica dedicada, medidas contra la API real (precio hasta
+   * $250, enviadas desde EE. UU.): la primera junta las marcas de gráfica (679
+   * resultados, 195 de cada 200 la nombran en el título) y la segunda los
+   * modelos de estación de trabajo, que a veces no la nombran (P15v, ZBook,
+   * Precision). Ordenadas por recién publicado, igual que las de CPU. +192
+   * llamadas por día.
+   */
+  gpuSearchProfiles: [
+    { query: "(quadro, rtx, gtx, geforce, nvidia)", sort: "newlyListed", maxPages: 1 },
+    {
+      query:
+        '(p15v, p15s, p14s, p1, p53, p52, p51, p17, "precision 5540", "precision 5550", "precision 7540", "precision 3541", "precision 3551", zbook)',
+      sort: "newlyListed",
+      maxPages: 1,
+    },
+  ],
   newListingProfiles: [
     { query: "(1135g7, 1145g7, 1155g7, 1165g7, 1185g7, 1195g7)", sort: "newlyListed", maxPages: 1 },
     { query: "(11300h, 11320h, 11370h, 11375h, 11390h, 11400h, 11800h, 11850h)", sort: "newlyListed", maxPages: 1 },

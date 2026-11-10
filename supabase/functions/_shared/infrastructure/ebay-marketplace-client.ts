@@ -28,6 +28,7 @@ interface EbayItemSummaryDto {
   // En subastas, la búsqueda no trae `price`: la puja actual viene acá.
   currentBidPrice?: { value: string; currency: string };
   bidCount?: number;
+  itemLocation?: { country?: string };
   estimatedAvailabilities?: { estimatedAvailabilityStatus?: string }[];
 }
 
@@ -76,6 +77,7 @@ function toListingSummary(dto: EbayItemSummaryDto): ListingSummary {
     // eBay lo manda como string ("99.8").
     sellerFeedbackPercentage: parseNumber(dto.seller?.feedbackPercentage),
     bidCount: dto.bidCount ?? null,
+    itemCountry: dto.itemLocation?.country ?? null,
   };
 }
 
@@ -121,6 +123,8 @@ function buildFilter(config: SearchConfig): string {
     `buyingOptions:{${config.includeAuctions ? "FIXED_PRICE|AUCTION" : "FIXED_PRICE"}}`,
     `deliveryCountry:${config.deliveryCountry}`,
   ];
+  // Desde dónde se envía: sin esto entran las de Canadá, Japón o Alemania.
+  if (config.itemLocationCountry) parts.push(`itemLocationCountry:${config.itemLocationCountry}`);
   return parts.join(",");
 }
 

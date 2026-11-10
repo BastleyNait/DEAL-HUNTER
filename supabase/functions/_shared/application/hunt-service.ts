@@ -15,6 +15,8 @@ import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
 import { createSpecialDealMatcher } from "../domain/special-deals.ts";
 import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgent-deals.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
+import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
+import { isDesignGrade } from "../domain/dedicated-gpu.ts";
 import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
@@ -41,6 +43,10 @@ interface Candidate {
  * día sin gastar una llamada por veta en cada corrida. Las vetas especiales
  * van siempre, adelante, fuera de la rotación.
  */
+/** Cupo extra por corrida para las de gráfica de diseño (se suma al de siempre). */
+const GPU_EXTRA_CANDIDATES = 10;
+const GPU_EXTRA_NOTIFICATIONS = 6;
+
 export function selectProfiles(config: SearchConfig, rotationSeed: number): SearchProfile[] {
   const pool = config.searchProfiles;
   const rotating =
@@ -51,7 +57,7 @@ export function selectProfiles(config: SearchConfig, rotationSeed: number): Sear
           const start = ((rotationSeed % pool.length) + pool.length) % pool.length;
           return Array.from({ length: count }, (_, i) => pool[(start + i) % pool.length]);
         })();
-  return [...config.specialSearchProfiles, ...config.newListingProfiles, ...rotating];
+  return [...config.specialSearchProfiles, ...config.gpuSearchProfiles, ...config.newListingProfiles, ...rotating];
 }
 
 /**
@@ -67,6 +73,11 @@ function promiseOf(candidate: Candidate, config: SearchConfig, urgentMatcher: Ur
   // Una posible OFERTA URGENTE tampoco puede quedar afuera por el tope de
   // candidatos: es lo que más importa, y las de $200-220 solo existen por ella.
   if (urgentMatcher.isUrgent(asPreScreenListing(candidate.summary), { lenient: true })) promise += 2000;
+
+  // Una con gráfica dedicada tampoco: es la que más margen deja. La de diseño
+  // (Quadro, RTX A, 4GB o más) casi al nivel de una urgente.
+  const gpu = gpuOf(candidate.summary);
+  if (gpu) promise += isDesignGrade(gpu) ? 1500 : 300;
 
   // Una especial nunca puede quedar afuera por el tope de candidatos por
   // corrida: es justo lo que se está buscando (llegan ~10 por día).
@@ -99,10 +110,12 @@ function asPreScreenListing(summary: ListingSummary): ListingDetail {
 
 /**
  * Orden en que vale la pena interrumpir: primero las OFERTAS URGENTES, después
- * las especiales, las CPUs prioritarias, y dentro de cada grupo por puntaje.
+ * las de gráfica de diseño, las especiales, las CPUs prioritarias, y dentro de cada grupo por puntaje.
  */
 function betterFirst(a: EvaluatedDeal, b: EvaluatedDeal): number {
   if (a.isUrgent !== b.isUrgent) return a.isUrgent ? -1 : 1;
+  // Después la gráfica de diseño: el mejor margen hasta ahora salió de una.
+  if (a.isGpuDesign !== b.isGpuDesign) return a.isGpuDesign ? -1 : 1;
   const aTop = Boolean(a.specialLabel) && !a.specialDemoted;
   const bTop = Boolean(b.specialLabel) && !b.specialDemoted;
   if (aTop !== bTop) return aTop ? -1 : 1;
@@ -219,7 +232,14 @@ export class HuntService {
     }
     const seenThisRun = new Set<string>();
     const fresh: Candidate[] = [];
+    // Las de gráfica de diseño tienen su propio cupo: se suman a las
+    // maxCandidatesPerRun de siempre, no les quitan lugar.
+    let regularCount = 0;
+    let gpuCount = 0;
     for (const candidate of unseen) {
+      const isGpuCandidate = isDesignGrade(gpuOf(candidate.summary));
+      if (!isGpuCandidate && regularCount >= config.maxCandidatesPerRun) break;
+      if (isGpuCandidate && gpuCount >= GPU_EXTRA_CANDIDATES) continue;
       const fingerprint = listingFingerprint(candidate.summary.title, candidate.summary.price);
       if (knownFingerprints.has(fingerprint) || seenThisRun.has(fingerprint)) {
         stats.duplicatesSkipped++;
@@ -238,7 +258,8 @@ export class HuntService {
       }
       seenThisRun.add(fingerprint);
       fresh.push(candidate);
-      if (fresh.length >= config.maxCandidatesPerRun) break;
+      if (isGpuCandidate) gpuCount++;
+      else regularCount++;
     }
 
     const qualifiedDeals: EvaluatedDeal[] = [];
@@ -457,7 +478,10 @@ export class HuntService {
     // avisaría — 58 de las 59 de compra directa disponibles al medir puntúan
     // 70 o menos, por los 8GB y por ser Latitude.
     const aboveThreshold = deals.filter(
-      (d) => (d.specialLabel && !d.specialDemoted) || (d.score ?? 0) > config.notifyScoreAbove,
+      (d) =>
+        (d.specialLabel && !d.specialDemoted) ||
+        (d.isGpuDesign && config.gpuPriority.alwaysNotifyDesignGrade) ||
+        (d.score ?? 0) > config.notifyScoreAbove,
     );
     if (aboveThreshold.length === 0) return;
 
@@ -466,7 +490,13 @@ export class HuntService {
     const notifiable = await this.selectNotifiable(aboveThreshold);
     if (notifiable.length === 0) return;
 
-    const individual = [...notifiable].sort(betterFirst).slice(0, config.maxNotificationsPerRun);
+    // Las de gráfica de diseño van primero pero con cupo extra: se suman a los
+    // maxNotificationsPerRun de siempre, no los desplazan al resumen.
+    const sorted = [...notifiable].sort(betterFirst);
+    const individual = [
+      ...sorted.filter((d) => d.isGpuDesign).slice(0, GPU_EXTRA_NOTIFICATIONS),
+      ...sorted.filter((d) => !d.isGpuDesign).slice(0, config.maxNotificationsPerRun),
+    ].sort(betterFirst);
     const individualIds = new Set(individual.map((d) => d.itemId));
 
     const sent: string[] = [];
@@ -516,6 +546,7 @@ export class HuntService {
     isHighSpec = false,
   ) {
     const text = `${listing.title} ${listing.descriptionText}`;
+    const gpu = gpuOf(listing);
     return {
       itemId: listing.id,
       title: listing.title,
@@ -534,6 +565,8 @@ export class HuntService {
       specialDemoted: candidate.specialDemoted,
       isUrgent,
       isHighSpec,
+      gpu: gpuLabel(gpu),
+      isGpuDesign: isDesignGrade(gpu),
       cosmeticNote: findCosmeticNote(listing.title, listing.descriptionText),
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
