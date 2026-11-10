@@ -37,7 +37,6 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // lista, ni en los avisos, ni en el dashboard).
   refurbishedExceptionMaxPrice: 220,
   refurbishedConditionIds: [2000, 2010, 2020, 2030, 2500],
-  greatDealMaxPrice: 160,
   greatDealMinScore: 80,
   // Todos los condition IDs de eBay MENOS 7000 ("For parts or not working").
   // Importante: 2010/2020/2030 (Excellent/Very Good/Good - Refurbished), 2750

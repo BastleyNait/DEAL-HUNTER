@@ -35,10 +35,9 @@ export function createWeightedScoringStrategy(
       // no lo que vas a terminar pagando, así que no hay forma de afirmar que
       // sea una ganga. El puntaje se calcula igual para poder ordenarlas.
       const isAuction = listing.buyingOptions.includes("AUCTION");
-      const isGreatDeal =
-        !isAuction &&
-        ((listing.price != null && listing.price <= config.greatDealMaxPrice) ||
-          score >= config.greatDealMinScore);
+      // Solo por puntaje: el precio ya lo acota el tope general, y "barato" a
+      // secas dejaba pasar de ofertaza equipos flojos.
+      const isGreatDeal = !isAuction && score >= config.greatDealMinScore;
 
       return { score, isGreatDeal };
     },

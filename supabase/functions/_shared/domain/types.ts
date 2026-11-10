@@ -433,7 +433,6 @@ export interface SearchConfig {
   // antes de comprar (ver rules/exclusion-rules.ts -> priceEligibilityRule).
   refurbishedExceptionMaxPrice: number;
   refurbishedConditionIds: number[];
-  greatDealMaxPrice: number;
   greatDealMinScore: number;
   includedConditionIds: number[];
   includeAuctions: boolean;

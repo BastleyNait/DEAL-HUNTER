@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { EvaluatedDeal, NotificationChannel } from "../domain/types.ts";
+import { chipsText, labelDeal, PLAIN_HEADLINE } from "../domain/deal-labels.ts";
 import { needsBatteryGradeReview } from "../domain/hardware-signals.ts";
 import { getApprovedChatIds } from "./telegram-recipients.ts";
 import { dealKeyboard, recordAlertMessages } from "./telegram-deal-reactions.ts";
@@ -9,30 +10,15 @@ export function escapeHtml(s: string): string {
 }
 
 export function formatMessage(deal: EvaluatedDeal): string {
-  // Una subasta nunca se anuncia como ofertaza: el precio final es desconocido.
-  // Y cuando se avisa es porque está por cerrar, así que eso encabeza.
-  // El tipo especial le gana a "ofertaza" en compra directa: es la categoría
-  // que se está buscando a propósito, no solo un buen puntaje. En subasta
-  // sigue mandando el cierre, con la marca del tipo al lado.
-  // Una Dell 2 en 1 que igual llegó al aviso (por puntaje) no se anuncia como
-  // oferta especial: es una oferta normal.
-  const special =
-    deal.specialLabel && !deal.specialDemoted
-      ? `🔄 <b>OFERTA ${escapeHtml(deal.specialLabel.toUpperCase())}</b>`
-      : null;
-  // OFERTA URGENTE le gana a todo lo demás: es la combinación que se compra
-  // sin pensarlo. Si además es 2 en 1, se dice al lado.
-  const header = deal.isUrgent
-    ? `💰 <b>OFERTA URGENTE</b> 💰${special ? ` · ${special}` : ""}`
-    : deal.isAuction
-    ? `⏰ <b>Subasta por cerrar</b>${special ? ` · ${special}` : ""}`
-    : special
-      ? special
-      : deal.isGreatDeal
-        ? "🚨 <b>OFERTAZA</b>"
-        : deal.isPriority
-          ? "⭐ <b>CPU prioritaria</b>"
-          : "🔥 <b>Oferta encontrada</b>";
+  // Los nombres y su jerarquía viven en domain/deal-labels.ts: el encabezado es
+  // la etiqueta de más peso y el resto (GPU, 2 en 1, CPU prioritaria...) va
+  // como chips, para que una urgente con GPU diga las dos cosas.
+  const { headline: top, chips } = labelDeal(deal);
+  const header = top
+    ? top.id === "urgent"
+      ? `${top.emoji} <b>${top.headline}</b> ${top.emoji}`
+      : `${top.emoji} <b>${top.headline}</b>`
+    : `${PLAIN_HEADLINE.emoji} <b>${PLAIN_HEADLINE.headline}</b>`;
   const auctionTag = deal.isAuction ? ` · ${timeLeft(deal.endDate)}` : "";
   const missing: string[] = [];
   if (!deal.hasDescription) missing.push("sin descripción");
@@ -41,6 +27,7 @@ export function formatMessage(deal: EvaluatedDeal): string {
 
   const lines = [
     `${header} — ${deal.cpuMatch} (puntaje ${deal.score ?? "?"}/100)${auctionTag}`,
+    ...(chips.length > 0 ? [chipsText(chips)] : []),
     ``,
     `<b>${escapeHtml(deal.title)}</b>`,
     `💵 ${deal.price ?? "?"} ${deal.currency}${deal.isAuction ? " (precio actual, no final)" : ""}${deal.condition ? ` · ${escapeHtml(deal.condition)}` : ""}`,
@@ -87,13 +74,8 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 
   for (const deal of shown) {
     const title = deal.title.length > 58 ? `${deal.title.slice(0, 57)}…` : deal.title;
-    const tags = [
-      deal.isUrgent ? "💰 URGENTE" : null,
-      deal.isGpuDesign ? "🎮 GPU" : null,
-      deal.specialLabel && !deal.specialDemoted ? `🔄 ${deal.specialLabel}` : null,
-      deal.cpuMatch,
-      deal.isAuction ? "subasta" : null,
-    ]
+    const { headline, chips } = labelDeal(deal);
+    const tags = [chipsText([...(headline ? [headline] : []), ...chips]), deal.cpuMatch]
       .filter(Boolean)
       .join(" · ");
     lines.push(
