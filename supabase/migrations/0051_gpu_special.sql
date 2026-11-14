@@ -21,3 +21,17 @@ select item_id, title, price, currency, condition, cpu_match, score,
                                        else 220 end);
 
 grant select on public.deals_public to anon, authenticated;
+
+-- Las que ya están guardadas y calificadas: misma regla que gpu-special.ts,
+-- leída del nombre de gráfica guardado. (Las que se descartaron por precio
+-- entre $220 y $300 no se reevalúan: entran las nuevas.)
+update public.seen_listings
+   set gpu_special = true
+ where qualified = true
+   and price is not null and price <= 300
+   and gpu is not null
+   and (
+     gpu ~* '(quadro (p(6\d\d|[1-5]\d{3})|t\d{3,4}|rtx \d{4})|nvidia t\d{3,4}|rtx a\d{3,4}|geforce gtx (1050\s*ti|106\d|107\d|108\d|16\d\d)|geforce rtx \d{4}|radeon pro (wx (3[1-9]\d{2}|[4-9]\d{3})|[5-9]\d{3}m?)|radeon rx (5[5-9]\d{2}|6\d{3}|7\d{3}))'
+     or (gpu like '%según el modelo%'
+         and title ~* '(thinkpad\s+p(15v?|17|53|52|1)\M|\mp15v\M|precision\s+(55[3-7]0|75[3-7]0|77[3-7]0|76[3-7]0)\M)')
+   );

@@ -36,13 +36,6 @@ const GPU_PATTERNS: { re: RegExp; build: (m: RegExpMatchArray) => Omit<Dedicated
     re: /\bradeon\s+pro\s+(wx\s*\d{4}|\d{4}m?)\b/i,
     build: (m) => ({ name: `AMD Radeon Pro ${m[1].toUpperCase().replace(/WX\s*/, "WX ")}`, professional: true }),
   },
-  // Quadro de 4 dígitos sin "Quadro" delante ("... 512GB T1000"): ningún
-  // modelo de laptop se llama así. Las de 3 dígitos (T500, T550) sí chocan con
-  // ThinkPad viejas, así que de esas solo P600/P620.
-  {
-    re: /\b((?:t[12]|p[1-5])[02]00|p6[02]0)\b/i,
-    build: (m) => ({ name: `NVIDIA Quadro ${m[1].toUpperCase()}`, professional: true }),
-  },
   { re: /\bradeon\s+(rx\s*\d{3,4}m?)\b/i, build: (m) => ({ name: `AMD Radeon ${m[1].toUpperCase().replace(/RX\s*/, "RX ")}`, professional: false }) },
 ];
 
