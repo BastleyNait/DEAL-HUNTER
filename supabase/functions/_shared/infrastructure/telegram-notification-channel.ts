@@ -41,6 +41,7 @@ export function formatMessage(deal: EvaluatedDeal): string {
   // margen deja. Va como línea propia para que se vea sin abrir el link.
   if (deal.gpu) {
     lines.push(`🎮 GPU dedicada: ${escapeHtml(deal.gpu)}${deal.isGpuDesign ? " — equipo para diseño / AutoCAD" : ""}`);
+    if (deal.isGpuSpecial) lines.push("🎮 ESPECIAL GPU: gráfica de diseño, entra hasta $300 aunque pase el tope general");
   }
   // Grieta o golpe que no descarta: lo que dijo el vendedor, para mirar las fotos.
   if (deal.cosmeticNote) {

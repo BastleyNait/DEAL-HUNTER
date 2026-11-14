@@ -11,6 +11,7 @@ import {
 } from "../domain/hardware-signals.ts";
 import { createUrgentDealMatcher } from "../domain/urgent-deals.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
+import { isGpuSpecial } from "../domain/gpu-special.ts";
 
 /**
  * Una regla por cada `excludePatterns` del config (data-driven: agregar una
@@ -226,6 +227,8 @@ function priceEligibilityRule(config: SearchConfig, lenientUrgent: boolean): Exc
       if (urgentMatcher.isUrgent(listing, { lenient: lenientUrgent })) return { excluded: false };
       // 16GB + 1TB: vale pagar más (ver highSpecException).
       if (highSpecMatcher.isHighSpec(listing, { lenient: lenientUrgent })) return { excluded: false };
+      // ESPECIAL GPU: gráfica buena, hasta su propio tope ($300).
+      if (isGpuSpecial(listing, config)) return { excluded: false };
       // Marcas con tope propio (Lenovo hasta $220).
       if (brandCaps.some((c) => c.re.test(listing.title) && listing.price! <= c.max)) return { excluded: false };
 

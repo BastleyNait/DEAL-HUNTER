@@ -104,7 +104,7 @@ function aspectsToText(dto: EbayItemDetailDto): string {
     .join(". ");
 }
 
-function buildFilter(config: SearchConfig): string {
+function buildFilter(config: SearchConfig, profile?: SearchProfile): string {
   // El techo de precio va hasta refurbishedExceptionMaxPrice (>= maxPriceUsd)
   // para que eBay nos devuelva también los reacondicionados con Best Offer que
   // se evalúan en priceEligibilityRule; el resto de los casos se filtran ahí.
@@ -115,6 +115,9 @@ function buildFilter(config: SearchConfig): string {
     config.refurbishedExceptionMaxPrice,
     config.urgentDeal.maxPriceUsd,
     config.highSpecException.maxPriceUsd,
+    // Solo las búsquedas de gráfica suben el techo (ESPECIAL GPU, $300): en
+    // las demás, traer más caras ocuparía lugares de las que sí califican.
+    profile?.maxPriceUsd ?? 0,
   );
   const parts = [
     `price:[..${priceCeiling}]`,
@@ -138,7 +141,7 @@ export class EbayMarketplaceClient implements MarketplaceClient {
     url.searchParams.set("q", profile.query);
     const categoryId = profile.categoryId === undefined ? config.categoryId : profile.categoryId;
     if (categoryId) url.searchParams.set("category_ids", categoryId);
-    url.searchParams.set("filter", buildFilter(config));
+    url.searchParams.set("filter", buildFilter(config, profile));
     url.searchParams.set("sort", profile.sort);
     url.searchParams.set("limit", String(page.pageSize));
     url.searchParams.set("offset", String(page.page * page.pageSize));

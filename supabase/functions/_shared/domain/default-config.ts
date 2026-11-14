@@ -303,14 +303,21 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * llamadas por día.
    */
   gpuSearchProfiles: [
-    { query: "(quadro, rtx, gtx, geforce, nvidia)", sort: "newlyListed", maxPages: 1 },
+    { query: "(quadro, rtx, gtx, geforce, nvidia)", sort: "newlyListed", maxPages: 1, maxPriceUsd: 300 },
     {
       query:
         '(p15v, p15s, p14s, p1, p53, p52, p51, p17, "precision 5540", "precision 5550", "precision 7540", "precision 3541", "precision 3551", zbook)',
       sort: "newlyListed",
       maxPages: 1,
+      maxPriceUsd: 300,
     },
   ],
+  /**
+   * ESPECIAL GPU: hasta $300 si la gráfica es buena (P620 o mejor). Es un
+   * carril aparte: los topes generales ($200, $220 Lenovo y urgente, $250
+   * 16GB+1TB) no cambian. Las búsquedas de gráfica traen hasta este precio.
+   */
+  gpuSpecial: { maxPriceUsd: 300 },
   newListingProfiles: [
     { query: "(1135g7, 1145g7, 1155g7, 1165g7, 1185g7, 1195g7)", sort: "newlyListed", maxPages: 1 },
     { query: "(11300h, 11320h, 11370h, 11375h, 11390h, 11400h, 11800h, 11850h)", sort: "newlyListed", maxPages: 1 },

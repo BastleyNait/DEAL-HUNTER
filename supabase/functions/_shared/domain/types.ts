@@ -81,6 +81,12 @@ export interface SearchProfile {
   maxPages: number;
   /** Override opcional; si no viene, usa config.categoryId. */
   categoryId?: string | null;
+  /**
+   * Techo de precio propio de esta búsqueda, si es mayor que el general (las
+   * de gráfica buscan hasta gpuSpecial.maxPriceUsd). Solo cambia lo que trae
+   * eBay; quién califica lo decide priceEligibilityRule.
+   */
+  maxPriceUsd?: number;
 }
 
 /** Puerto: cualquier marketplace de segunda mano (eBay hoy, otro mañana). */
@@ -162,6 +168,8 @@ export interface EvaluatedDeal {
   gpu: string | null;
   /** La gráfica sirve para diseño / AutoCAD (profesional, o 4GB o más): se avisa primero. */
   isGpuDesign: boolean;
+  /** ESPECIAL GPU: gráfica buena (P620 o mejor) a hasta gpuSpecial.maxPriceUsd. */
+  isGpuSpecial: boolean;
   /**
    * Lo que dijo el vendedor de una grieta, golpe o daño estético que no
    * descarta (no es la pantalla ni la bisagra), para revisar las fotos antes
@@ -315,6 +323,16 @@ export interface GpuPriorityConfig {
   otherBonus: number;
   /** Una de diseño se avisa aunque no supere notifyScoreAbove. */
   alwaysNotifyDesignGrade: boolean;
+}
+
+/**
+ * ESPECIAL GPU: una laptop con gráfica buena para diseño (la Quadro P620 de la
+ * P15v o mejor: T1000, T2000, RTX A, GTX 1650, RTX 3050...) puede costar hasta
+ * maxPriceUsd aunque pase los topes generales, que no cambian. Pasó con un
+ * cliente que buscaba una P15v para diseño: las buenas están entre $200 y $300.
+ */
+export interface GpuSpecialConfig {
+  maxPriceUsd: number;
 }
 
 /**
@@ -515,6 +533,8 @@ export interface SearchConfig {
   brandPriceCaps: BrandPriceCapConfig[];
   /** Cuánto pesa una gráfica dedicada en el puntaje y en el aviso (ver GpuPriorityConfig). */
   gpuPriority: GpuPriorityConfig;
+  /** Carril ESPECIAL GPU: tope de precio propio para gráficas buenas (ver GpuSpecialConfig). */
+  gpuSpecial: GpuSpecialConfig;
   /**
    * País desde donde tiene que enviarse lo que se compra (casillero en EE. UU.).
    * Se filtra en la búsqueda de eBay y se vuelve a comprobar en cada

@@ -17,6 +17,7 @@ import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgen
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
 import { isDesignGrade } from "../domain/dedicated-gpu.ts";
+import { isGpuSpecial } from "../domain/gpu-special.ts";
 import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
@@ -306,6 +307,7 @@ export class HuntService {
           // Con el detalle completo: la RAM, el disco y los problemas ya se leen de verdad.
           qualifies && urgentMatcher.isUrgent(detail),
           qualifies && highSpecMatcher.isHighSpec(detail),
+          qualifies && isGpuSpecial(detail, config),
         );
         await this.dealRepository.save(evaluatedDeal);
 
@@ -546,6 +548,7 @@ export class HuntService {
     isPriority = false,
     isUrgent = false,
     isHighSpec = false,
+    isGpuSpecialDeal = false,
   ) {
     const text = `${listing.title} ${listing.descriptionText}`;
     const gpu = gpuOf(listing);
@@ -568,7 +571,9 @@ export class HuntService {
       isUrgent,
       isHighSpec,
       gpu: gpuLabel(gpu),
-      isGpuDesign: isDesignGrade(gpu),
+      // Una ESPECIAL GPU siempre es de diseño: se avisa primero y no se pierde por el umbral.
+      isGpuDesign: isDesignGrade(gpu) || isGpuSpecialDeal,
+      isGpuSpecial: isGpuSpecialDeal,
       cosmeticNote: findCosmeticNote(listing.title, listing.descriptionText),
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),

@@ -11,13 +11,14 @@ import type { EvaluatedDeal } from "./types.ts";
  * Jerarquía de encabezado, de mayor a menor:
  *   💰 OFERTA URGENTE   la combinación que se compra sin pensarlo
  *   ⏰ SUBASTA          el aviso es porque está por cerrar
+ *   🎮 ESPECIAL GPU     gráfica buena (P620 o mejor) a hasta $300: carril aparte
  *   🎮 GPU DEDICADA     gráfica de diseño: el mejor margen hasta ahora
  *   🔄 2 EN 1           el tipo especial que se busca a propósito
  *   🚨 OFERTAZA         puntaje 80+, o 16GB+ a $130 o menos con 70+ (ver cheapGreatDeal)
  *   🔥 OFERTA           cualquier otra que pasó el filtro
  * "⭐ CPU prioritaria" nunca encabeza: es una propiedad, va como chip.
  */
-export type DealLabelId = "urgent" | "auction" | "gpu" | "special" | "great" | "priority";
+export type DealLabelId = "urgent" | "auction" | "gpuSpecial" | "gpu" | "special" | "great" | "priority";
 
 export interface DealLabel {
   id: DealLabelId;
@@ -31,6 +32,7 @@ export interface DealLabel {
 const LABELS: Record<DealLabelId, DealLabel> = {
   urgent: { id: "urgent", emoji: "💰", headline: "OFERTA URGENTE", chip: "URGENTE" },
   auction: { id: "auction", emoji: "⏰", headline: "SUBASTA POR CERRAR", chip: "SUBASTA" },
+  gpuSpecial: { id: "gpuSpecial", emoji: "🎮", headline: "ESPECIAL GPU", chip: "ESPECIAL GPU" },
   gpu: { id: "gpu", emoji: "🎮", headline: "GPU DEDICADA", chip: "GPU" },
   special: { id: "special", emoji: "🔄", headline: "OFERTA 2 EN 1", chip: "2 EN 1" },
   great: { id: "great", emoji: "🚨", headline: "OFERTAZA", chip: "OFERTAZA" },
@@ -38,13 +40,13 @@ const LABELS: Record<DealLabelId, DealLabel> = {
 };
 
 /** Orden de jerarquía: el primero que aplica es el encabezado. "priority" no encabeza. */
-const HEADLINE_ORDER: DealLabelId[] = ["urgent", "auction", "gpu", "special", "great"];
+const HEADLINE_ORDER: DealLabelId[] = ["urgent", "auction", "gpuSpecial", "gpu", "special", "great"];
 /** Orden en que se listan los chips. */
-const CHIP_ORDER: DealLabelId[] = ["urgent", "gpu", "special", "great", "priority", "auction"];
+const CHIP_ORDER: DealLabelId[] = ["urgent", "gpuSpecial", "gpu", "special", "great", "priority", "auction"];
 
 type LabelInput = Pick<
   EvaluatedDeal,
-  "isUrgent" | "isAuction" | "isGpuDesign" | "gpu" | "specialLabel" | "specialDemoted" | "isGreatDeal" | "isPriority"
+  "isUrgent" | "isAuction" | "isGpuDesign" | "isGpuSpecial" | "gpu" | "specialLabel" | "specialDemoted" | "isGreatDeal" | "isPriority"
 >;
 
 /** Qué etiquetas le tocan a la oferta (sin orden). */
@@ -53,7 +55,9 @@ export function appliedLabels(deal: LabelInput): Set<DealLabelId> {
   if (deal.isUrgent) set.add("urgent");
   if (deal.isAuction) set.add("auction");
   // Cualquier gráfica dedicada es un chip; solo la de diseño encabeza.
-  if (deal.gpu) set.add("gpu");
+  // ESPECIAL GPU ya dice que tiene gráfica: no se repite el chip "GPU".
+  if (deal.isGpuSpecial) set.add("gpuSpecial");
+  else if (deal.gpu) set.add("gpu");
   // Una 2 en 1 de baja prioridad (Dell) que igual llegó al aviso es una oferta normal.
   if (deal.specialLabel && !deal.specialDemoted) set.add("special");
   // Una subasta nunca es ofertaza: el precio final es desconocido.
