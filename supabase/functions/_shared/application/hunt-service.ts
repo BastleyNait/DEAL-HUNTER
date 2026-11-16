@@ -18,6 +18,7 @@ import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
 import { isDesignGrade } from "../domain/dedicated-gpu.ts";
 import { isGpuSpecial, isProfessionalGpuLabel } from "../domain/gpu-special.ts";
+import { workstationScore } from "../domain/workstation-score.ts";
 import { createExclusionRules, createNormalBudgetCheck, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
@@ -485,9 +486,13 @@ export class HuntService {
    */
   private async notifyWorkstations(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
     if (!this.workstationChannel) return;
+    // Con el puntaje de estación (relativo a la gráfica y al precio), que es el
+    // que va en el mensaje: el general le daba 100 a una T550 de $495.
     const picks = deals
-      .filter((d) => d.isGpuSpecial && isProfessionalGpuLabel(d.gpu) && (d.score ?? 0) >= config.gpuSpecial.workstationAlertMinScore)
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      .filter((d) => d.isGpuSpecial && isProfessionalGpuLabel(d.gpu))
+      .map((d) => ({ ...d, score: workstationScore(d.price, d.gpu, d.score, d.isAuction) }))
+      .filter((d) => d.score >= config.gpuSpecial.workstationAlertMinScore)
+      .sort((a, b) => b.score - a.score);
     for (const deal of picks) {
       try {
         await this.workstationChannel.notify(deal);

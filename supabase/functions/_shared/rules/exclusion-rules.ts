@@ -76,6 +76,23 @@ function itemLocationRule(config: SearchConfig): ExclusionRule {
  * contra la descripción a propósito — ver el comentario de titleExcludePatterns
  * en domain/types.ts.
  */
+/**
+ * Un repuesto que nombra la laptop para la que sirve: "RC30-0328 Battery For
+ * Razer Blade 15 ... RTX 2060", "Replacement Keyboard for Dell XPS 15". La
+ * pieza va antes del "for"; en una laptop real ("Dell ... with Charger") no.
+ */
+const ACCESSORY_FOR_RE =
+  /^(?:[\w-]+\s+){0,3}?(?:new\s+|oem\s+|genuine\s+|original\s+|replacement\s+|laptop\s+)*(?:battery|batteries|charger|ac\s+adapter|power\s+adapter|keyboard|palmrest|lcd|screen|display|motherboard|mainboard|fan|heatsink|hinges?|bottom\s+(?:case|cover)|back\s+cover|bezel|ssd|hdd)\b[^|]{0,40}?\bfor\b/i;
+
+function accessoryForRule(): ExclusionRule {
+  return {
+    id: "part_or_component",
+    evaluate(listing: ListingDetail) {
+      return ACCESSORY_FOR_RE.test(listing.title) ? { excluded: true, reason: "part_or_component" } : { excluded: false };
+    },
+  };
+}
+
 function titlePatternRules(config: SearchConfig): ExclusionRule[] {
   return config.titleExcludePatterns.map((p) => {
     const regex = new RegExp(p.pattern, p.flags);
@@ -292,6 +309,7 @@ export function createExclusionRules(config: SearchConfig, lenientUrgent = false
     itemLocationRule(config),
     ...patternRules(config),
     ...titlePatternRules(config),
+    accessoryForRule(),
     sellerReputationRule(config),
     declaredDamageRule(),
     unitFailureRule(),

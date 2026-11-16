@@ -343,7 +343,8 @@ export interface GpuSpecialConfig {
    * avisa una ESPECIAL GPU con gráfica profesional (Quadro, RTX A, T-series,
    * Radeon Pro) y puntaje de este número o más. El bot principal no avisa las
    * que solo entran por este carril (pasan los topes normales): esas se ven en
-   * el dashboard.
+   * el dashboard. Se compara contra el puntaje de estación
+   * (domain/workstation-score.ts), no el general.
    */
   workstationAlertMinScore: number;
 }

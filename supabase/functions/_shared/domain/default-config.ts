@@ -318,9 +318,11 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * 16GB+1TB) no cambian. Las búsquedas de gráfica traen hasta este precio.
    * Las que solo entran por acá no van al bot principal (se ven en el
    * dashboard); el bot de estaciones de trabajo avisa solo las profesionales
-   * con puntaje workstationAlertMinScore o más.
+   * con puntaje de estación (domain/workstation-score.ts) de
+   * workstationAlertMinScore o más: 80 es, por ejemplo, una P15v con P620 a
+   * $190 o una RTX A2000 a $300.
    */
-  gpuSpecial: { maxPriceUsd: 500, workstationAlertMinScore: 90 },
+  gpuSpecial: { maxPriceUsd: 500, workstationAlertMinScore: 80 },
   newListingProfiles: [
     { query: "(1135g7, 1145g7, 1155g7, 1165g7, 1185g7, 1195g7)", sort: "newlyListed", maxPages: 1 },
     { query: "(11300h, 11320h, 11370h, 11375h, 11390h, 11400h, 11800h, 11850h)", sort: "newlyListed", maxPages: 1 },
