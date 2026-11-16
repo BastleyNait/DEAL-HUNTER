@@ -185,6 +185,41 @@ function missingStorageRule(): ExclusionRule {
 }
 
 /** Regla numérica aparte: batería con % explícito por debajo del umbral configurado. */
+/**
+ * BIOS bloqueada o con contraseña: no se puede reinstalar ni cambiar el
+ * arranque, y no se revende. El título ya lo miraba titleExcludePatterns; casi
+ * siempre lo dicen en la descripción ("Note that BIOS is locked", "BIOS LOCK
+ * No OS") o en los datos del producto. No cuenta si lo niegan: "not BIOS
+ * locked", "free of any Bitlocker, Bios Lock", "BIOS Locked: No".
+ */
+const BIOS_LOCK_RE =
+  /\b(?:bios|uefi)[\s\/-]*(?:is\s+|are\s+)?(?:lock(?:ed)?|pw|pwd|passworded|password[\s-]*(?:protected|locked|set|enabled|on|vorhanden))\b|\b(?:has|with|have)\s+(?:an?\s+)?(?:admin\s+|supervisor\s+)?bios\s+password\b|\block(?:ed)?\s+(?:to\s+)?(?:the\s+)?bios\b|\b(?:admin|supervisor)\s+(?:bios\s+)?password\s+(?:is\s+)?(?:set|locked|protected|enabled)\b|\bbios\s+password\s+vorhanden\b/gi;
+const BIOS_NEGATED_BEFORE_RE = /\b(?:no|not|isn'?t|aren'?t|never|free\s+of(?:\s+any)?|without|w\/o|zero|un)\b[\s\w\/,&-]{0,30}$/i;
+const BIOS_NEGATED_AFTER_RE = /^\s*[:=-]?\s*(?:no|none|n\/a|false|unlocked|removed|cleared)\b/i;
+
+export function mentionsBiosLock(text: string): boolean {
+  for (const m of text.matchAll(BIOS_LOCK_RE)) {
+    const at = m.index ?? 0;
+    const before = text.slice(Math.max(0, at - 40), at);
+    const after = text.slice(at + m[0].length, at + m[0].length + 12);
+    if (BIOS_NEGATED_BEFORE_RE.test(before) || BIOS_NEGATED_AFTER_RE.test(after)) continue;
+    return true;
+  }
+  return false;
+}
+
+function biosLockRule(): ExclusionRule {
+  return {
+    id: "bios_locked",
+    evaluate(listing: ListingDetail) {
+      const aspects = (listing.aspects ?? []).map((a) => `${a.name}: ${a.value}`).join(". ");
+      return mentionsBiosLock(`${listing.title}. ${listing.descriptionText}. ${aspects}`)
+        ? { excluded: true, reason: "bios_locked" }
+        : { excluded: false };
+    },
+  };
+}
+
 function batteryThresholdRule(config: SearchConfig): ExclusionRule {
   return {
     id: "battery_below_threshold",
@@ -261,6 +296,7 @@ export function createExclusionRules(config: SearchConfig, lenientUrgent = false
     implausiblePriceRule(config),
     missingStorageRule(),
     batteryThresholdRule(config),
+    biosLockRule(),
     priceEligibilityRule(config, lenientUrgent),
   ];
 }

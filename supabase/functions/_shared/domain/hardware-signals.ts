@@ -2,15 +2,51 @@
 // Centralizados acá porque los usan tanto las reglas de exclusión como el scoring,
 // y no queremos dos regex ligeramente distintas divergiendo con el tiempo.
 
-const BATTERY_PERCENT_RE = /batt(?:ery)?[^\d%]{0,15}(\d{1,3})\s?%/i;
+// Salud de la batería en %. Los vendedores lo escriben de muchas formas; se
+// prueban de la más específica a la más general y gana la primera:
+//  1. desgaste: "wear 14%", "Wear Level: 76.4%", "47.6% Battery Wear" (salud = 100 - desgaste)
+//  2. "Battery: 65%", "Battery Health tested at 61%" (cerca, sin cruzar la frase)
+//  3. "health in BIOS (31% of full capacity", "a capacity of 68% of original",
+//     "reduced at 31% health capacity" — solo si se habla de batería justo antes
+//  4. al revés: "65% battery health", "52% BATT"
+// El número nunca se toma del medio de otro ("14.8%" no es 8%, "61,834" no es 834).
+const NUM = String.raw`(?<![\d.,])(\d{1,3}(?:\.\d+)?)\s?%`;
+const WEAR_RES = [
+  new RegExp(String.raw`\bwear(?:\s*level)?\s*(?:of|is|at|:|=)?\s*${NUM}`, "i"),
+  new RegExp(String.raw`${NUM}\s*(?:battery\s+|batt\s+)?wear\b`, "i"),
+];
+const NEAR_RE = new RegExp(String.raw`batt(?:ery)?[^\d%.,;|\n]{0,30}?${NUM}`, "i");
+const HEALTH_RES = [
+  new RegExp(String.raw`(?:health|capacity)[^\d%.;|\n]{0,25}?${NUM}`, "i"),
+  new RegExp(String.raw`${NUM}\s*(?:of\s+)?(?:(?:full|original|design)\s+)?(?:battery\s+)?(?:health|capacity)`, "i"),
+];
+const REVERSE_RE = new RegExp(String.raw`${NUM}\s*(?:of\s+)?(?:original\s+)?batt(?:ery)?\b`, "i");
+const BATT_WORD_RE = /batt/i;
 
-/** Devuelve el % de batería mencionado en el texto, o null si no hay dato. */
-export function extractBatteryPercent(text: string): number | null {
-  const m = text.match(BATTERY_PERCENT_RE);
+function pctOf(m: RegExpMatchArray | null): number | null {
   if (!m) return null;
-  const pct = Number(m[1]);
-  if (Number.isNaN(pct) || pct > 100) return null;
-  return pct;
+  const n = Number(m[1]);
+  return Number.isNaN(n) || n > 100 ? null : n;
+}
+
+/** Devuelve el % de salud de la batería mencionado en el texto, o null si no hay dato. */
+export function extractBatteryPercent(text: string): number | null {
+  // Desgaste y "salud/capacidad" solo cuentan si se habla de batería poco antes.
+  const nearBattery = (m: RegExpMatchArray | null) =>
+    m && BATT_WORD_RE.test(text.slice(Math.max(0, (m.index ?? 0) - 90), (m.index ?? 0) + m[0].length + 15)) ? m : null;
+
+  for (const re of WEAR_RES) {
+    const wear = pctOf(nearBattery(text.match(re)));
+    if (wear !== null) return Math.round(100 - wear);
+  }
+  const near = pctOf(text.match(NEAR_RE));
+  if (near !== null) return Math.round(near);
+  for (const re of HEALTH_RES) {
+    const health = pctOf(nearBattery(text.match(re)));
+    if (health !== null) return Math.round(health);
+  }
+  const reverse = pctOf(text.match(REVERSE_RE));
+  return reverse === null ? null : Math.round(reverse);
 }
 
 const BATTERY_MENTION_RE = /batt(?:ery)?/i;
