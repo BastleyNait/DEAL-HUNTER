@@ -67,3 +67,79 @@ export function marketplaceTitle(name: string, max = 100): string {
   const lastSpace = cut.lastIndexOf(" ");
   return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:—-]+$/, "");
 }
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** "Etiqueta: resto" con la etiqueta en negrita (si hay una etiqueta corta antes de los dos puntos). */
+function labelled(text: string): string {
+  const match = /^([^:]{1,48}:)(\s*)([\s\S]*)$/.exec(text);
+  if (!match) return escapeHtml(text);
+  return `<strong>${escapeHtml(match[1])}</strong>${match[3] ? " " + escapeHtml(match[3]) : ""}`;
+}
+
+const BULLET = /^(?:[*•\-–]\s+|\d+[.)]\s+)/;
+const SECTION = /^🔹/u;
+const HEADLINE = /^🟦/u;
+
+/**
+ * El texto de marketing (marketing-copy.ts) como HTML para la tienda: título
+ * 🟦 y secciones 🔹 como encabezados, "Etiqueta: valor" con la etiqueta en
+ * negrita y las viñetas como lista. Solo usa etiquetas que el editor del
+ * admin conoce (h3, p, strong, ul, li), así que se puede seguir editando sin
+ * que se pierda nada. Los emojis y los dos puntos se quedan: al aplanarlo con
+ * storeDescriptionToText para Facebook sale el mismo texto de antes.
+ * Un texto escrito a mano fuera de la plantilla queda como párrafos.
+ */
+export function marketingTextToHtml(text: string): string {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trim());
+  const out: string[] = [];
+  let list: string[] = [];
+  const flush = () => {
+    if (list.length) out.push(`<ul>${list.join("")}</ul>`);
+    list = [];
+  };
+
+  for (const line of lines) {
+    if (!line) {
+      flush();
+      continue;
+    }
+    if (BULLET.test(line)) {
+      list.push(`<li><p>${labelled(line.replace(BULLET, ""))}</p></li>`);
+      continue;
+    }
+    flush();
+    if (HEADLINE.test(line)) out.push(`<h3>${escapeHtml(line)}</h3>`);
+    else if (SECTION.test(line) && /:\s*$/.test(line)) out.push(`<h3>${escapeHtml(line)}</h3>`);
+    else if (SECTION.test(line)) out.push(`<p>${labelled(line)}</p>`);
+    else out.push(`<p>${escapeHtml(line)}</p>`);
+  }
+  flush();
+  return out.join("");
+}
+
+/**
+ * Ya tiene formato (encabezados o negritas): no hace falta convertirla. Una
+ * lista sola no cuenta: así queda el texto plano que la tienda convirtió.
+ */
+export function isRichDescription(html: string | null | undefined): boolean {
+  return /<(h[1-6]|strong|b)\b/i.test(html ?? "");
+}
+
+export const STORE_LINK_PREFIX = "🛒 Mira fotos y detalles en";
+
+/**
+ * Texto para Facebook con el enlace de la tienda al final. Si ya traía un
+ * enlace (el texto guardado de una sincronización anterior) se reemplaza, no
+ * se duplica.
+ */
+export function withStoreLink(text: string, url: string): string {
+  const body = text
+    .split("\n")
+    .filter((line) => !line.startsWith(STORE_LINK_PREFIX))
+    .join("\n")
+    .trim();
+  return `${body}\n\n${STORE_LINK_PREFIX}: ${url}`;
+}

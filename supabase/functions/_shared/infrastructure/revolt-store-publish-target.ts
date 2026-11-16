@@ -1,4 +1,5 @@
 import type { PublishDraft, StorePublishResult, StorePublishTarget } from "../domain/types.ts";
+import { marketingTextToHtml } from "../domain/marketplace-text.ts";
 
 /** Lo que devuelve GET /api/products/:id de REVOLT-LAP (solo los campos que usamos). */
 export interface StoreProduct {
@@ -17,6 +18,13 @@ export interface StoreProduct {
   isActive?: boolean;
   badges?: string[];
 }
+
+/** Los campos de productInputSchema de REVOLT-LAP (lo que PUT /api/products/:id exige). */
+const PRODUCT_INPUT_KEYS = [
+  "name", "slug", "brand", "price", "originalPrice", "currency", "conditionGrade", "processor", "ram",
+  "storage", "display", "batteryHealth", "description", "verdict", "specs", "images", "badges", "stock",
+  "isActive", "isFeatured",
+] as const;
 
 /**
  * Adaptador HTTP contra la API admin de REVOLT-LAP (Next.js + Supabase, repo
@@ -53,7 +61,9 @@ export class RevoltStorePublishTarget implements StorePublishTarget {
       storage: draft.storage,
       display: draft.display,
       batteryHealth: draft.batteryHealth,
-      description: draft.description,
+      // La tienda muestra texto enriquecido; el texto plano del borrador queda
+      // en publications.description para Facebook.
+      description: marketingTextToHtml(draft.description),
       verdict: null,
       // La gráfica dedicada va como especificación "GPU": REVOLT-LAP la muestra
       // en la tarjeta del catálogo y como "Tarjeta gráfica" en la ficha.
@@ -98,6 +108,44 @@ export class RevoltStorePublishTarget implements StorePublishTarget {
     }
     const json = (await res.json()) as { data: StoreProduct };
     return json.data;
+  }
+
+  /**
+   * Cambia solo la descripción de un producto. PUT exige el producto completo
+   * (y lo que falta lo pone en [] o en su valor por defecto: fotos, specs y
+   * etiquetas se borrarían), así que se reenvía cada campo tal como vino del
+   * GET y se aborta si alguno no está.
+   */
+  async updateDescription(productId: string, description: string): Promise<StoreProduct> {
+    const res = await fetch(`${this.baseUrl}/api/products/${encodeURIComponent(productId)}`, {
+      headers: { "x-admin-password": this.adminPassword },
+    });
+    if (!res.ok) throw new Error(`REVOLT-LAP GET ${productId} error ${res.status}: ${await res.text()}`);
+    const current = ((await res.json()) as { data: Record<string, unknown> }).data;
+
+    const body: Record<string, unknown> = {};
+    for (const key of PRODUCT_INPUT_KEYS) {
+      if (!(key in current)) throw new Error(`El producto ${productId} no trae "${key}"; no se toca.`);
+      body[key] = current[key];
+    }
+    body.description = description;
+
+    const put = await fetch(`${this.baseUrl}/api/products/${encodeURIComponent(productId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-password": this.adminPassword },
+      body: JSON.stringify(body),
+    });
+    if (!put.ok) throw new Error(`REVOLT-LAP PUT ${productId} error ${put.status}: ${await put.text()}`);
+    const saved = ((await put.json()) as { data: Record<string, unknown> }).data;
+
+    // Todo menos la descripción tiene que haber quedado igual.
+    for (const key of PRODUCT_INPUT_KEYS) {
+      if (key === "description") continue;
+      if (JSON.stringify(saved[key]) !== JSON.stringify(current[key])) {
+        throw new Error(`El campo "${key}" de ${productId} cambió al guardar; revísalo en /admin.`);
+      }
+    }
+    return saved as unknown as StoreProduct;
   }
 
   /** Todo el inventario de la tienda (activas y borradores), el mismo listado que ve /admin. */

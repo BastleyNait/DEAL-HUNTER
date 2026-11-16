@@ -7,7 +7,13 @@ import { SupabasePublicationRepository } from "../_shared/infrastructure/supabas
 import { RevoltStorePublishTarget } from "../_shared/infrastructure/revolt-store-publish-target.ts";
 import type { PublicationRepository, StorePublishTarget } from "../_shared/domain/types.ts";
 import { legacyIdFromUrl, recordPurchase } from "../_shared/infrastructure/purchases.ts";
-import { marketplaceTitle, storeDescriptionToText } from "../_shared/domain/marketplace-text.ts";
+import {
+  isRichDescription,
+  marketingTextToHtml,
+  marketplaceTitle,
+  storeDescriptionToText,
+  withStoreLink,
+} from "../_shared/domain/marketplace-text.ts";
 
 // Se llama desde el navegador (el dashboard, sin login), a diferencia de
 // hunt-deals que solo lo llama el cron. Por eso lleva CORS y un secreto propio
@@ -268,7 +274,7 @@ Deno.serve(async (req) => {
       const itemId = String(body.itemId ?? "");
       const { data: row, error } = await supabase
         .from("publications")
-        .select("store_product_id")
+        .select("store_product_id, description")
         .eq("item_id", itemId)
         .maybeSingle();
       if (error) throw new Error(error.message);
@@ -286,8 +292,14 @@ Deno.serve(async (req) => {
       // Un campo vacío en la tienda no deja el aviso sin texto ni sin fotos:
       // ahí se queda lo que ya estaba.
       const fresh: Record<string, unknown> = { title: marketplaceTitle(product.name), store_slug: product.slug };
-      const description = storeDescriptionToText(product.description);
-      if (description) fresh.description = description;
+      // Al final, el enlace a la ficha (o a la tienda si sigue de borrador:
+      // la ficha de un producto inactivo no se ve).
+      const description = storeDescriptionToText(product.description) || String(row.description ?? "").trim();
+      // REVOLT_STORE_BASE_URL es la URL interna de la API (vercel.app); el
+      // cliente tiene que ver el dominio de la tienda.
+      const base = (Deno.env.get("REVOLT_STORE_PUBLIC_URL") ?? "https://revolt-laptops.com").replace(/\/+$/, "");
+      const pageUrl = product.isActive ? `${base}/laptops/${product.slug}` : base;
+      if (description) fresh.description = withStoreLink(description, pageUrl);
       if (product.images?.length) fresh.image_urls = product.images;
       // Facebook cobra en soles; si en la tienda quedó en otra moneda se
       // respeta el precio en soles que ya estaba.
@@ -304,6 +316,41 @@ Deno.serve(async (req) => {
           pricePen: fresh.price_pen ?? null,
         },
       });
+    } catch (err) {
+      console.error(err);
+      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  }
+
+  // Pasa a texto enriquecido la descripción de productos que ya están en la
+  // tienda (solo la descripción; el resto se reenvía igual). dryRun devuelve
+  // el antes/después sin guardar.
+  if (body.action === "store-richify") {
+    try {
+      const store = new RevoltStorePublishTarget(storeBaseUrl, storeAdminPassword);
+      const ids = Array.isArray(body.productIds) ? body.productIds.map(String).slice(0, 10) : [];
+      const results = [];
+      for (const id of ids) {
+        const product = await store.fetchProduct(id);
+        if (!product) {
+          results.push({ id, status: "not-found" });
+          continue;
+        }
+        if (isRichDescription(product.description)) {
+          results.push({ id, slug: product.slug, status: "already-rich" });
+          continue;
+        }
+        const plain = storeDescriptionToText(product.description);
+        const html = marketingTextToHtml(plain);
+        const after = storeDescriptionToText(html);
+        if (body.dryRun) {
+          results.push({ id, slug: product.slug, status: "dry-run", before: product.description, html, plain, after });
+          continue;
+        }
+        const saved = await store.updateDescription(id, html);
+        results.push({ id, slug: product.slug, status: "updated", saved: saved.description });
+      }
+      return json({ data: results });
     } catch (err) {
       console.error(err);
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);
