@@ -406,12 +406,13 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    */
   scorePenalties: [
     {
-      // Todas las Dell, premium incluidas: llegaban demasiado arriba en el
-      // puntaje frente a Lenovo y HP. Se suma a la resta de Latitude común.
+      // Todas las Dell, premium incluidas: no se revenden como las ThinkPad
+      // (se les dio la oportunidad y no salieron). 10 puntos de frente; se
+      // suma a la resta de Latitude común.
       label: "Dell",
       pattern: "\\b(?:dell|latitude|precision|xps|inspiron|vostro|alienware)\\b",
       flags: "i",
-      points: 5,
+      points: 10,
       scope: "title",
       ignoreNegated: false,
     },
