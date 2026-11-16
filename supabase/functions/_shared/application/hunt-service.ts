@@ -17,8 +17,8 @@ import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgen
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
 import { isDesignGrade } from "../domain/dedicated-gpu.ts";
-import { isGpuSpecial } from "../domain/gpu-special.ts";
-import { createExclusionRules, evaluateExclusions } from "../rules/exclusion-rules.ts";
+import { isGpuSpecial, isProfessionalGpuLabel } from "../domain/gpu-special.ts";
+import { createExclusionRules, createNormalBudgetCheck, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
   extractRamGb,
@@ -141,6 +141,8 @@ export class HuntService {
     private readonly dealRepository: DealRepository,
     private readonly buildScoringStrategy: (config: SearchConfig) => ScoringStrategy,
     private readonly notificationChannel: NotificationChannel,
+    /** Bot de estaciones de trabajo (ver GpuSpecialConfig). null = no configurado. */
+    private readonly workstationChannel: NotificationChannel | null = null,
   ) {}
 
   async run(rotationSeed = 0): Promise<RunStats> {
@@ -152,6 +154,7 @@ export class HuntService {
     // Dos juegos de reglas: el pre-descarte solo ve título y resumen, y ahí lo
     // que falta saber de una posible OFERTA URGENTE (RAM, disco) no descarta.
     const exclusionRules = createExclusionRules(config);
+    const withinNormalBudget = createNormalBudgetCheck(config);
     const preScreenRules = createExclusionRules(config, true);
     const scoringStrategy = this.buildScoringStrategy(config);
     const maxTier = maxCpuTier(config);
@@ -296,7 +299,7 @@ export class HuntService {
           isGreatDeal = result.isGreatDeal;
         }
 
-        const evaluatedDeal = this.toEvaluatedDeal(
+        const evaluatedDeal: EvaluatedDeal = this.toEvaluatedDeal(
           candidate,
           detail,
           qualifies,
@@ -309,6 +312,7 @@ export class HuntService {
           qualifies && highSpecMatcher.isHighSpec(detail),
           qualifies && isGpuSpecial(detail, config),
         );
+        evaluatedDeal.aboveNormalBudget = qualifies && !withinNormalBudget(detail);
         await this.dealRepository.save(evaluatedDeal);
 
         if (qualifies) {
@@ -475,7 +479,30 @@ export class HuntService {
    * primero, después por puntaje) y el resto en un solo mensaje de resumen.
    * Todas quedan igual en el dashboard.
    */
+  /**
+   * Bot de estaciones de trabajo: ESPECIAL GPU con gráfica profesional y
+   * puntaje muy alto. Corre aparte del bot principal y nunca lo frena.
+   */
+  private async notifyWorkstations(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
+    if (!this.workstationChannel) return;
+    const picks = deals
+      .filter((d) => d.isGpuSpecial && isProfessionalGpuLabel(d.gpu) && (d.score ?? 0) >= config.gpuSpecial.workstationAlertMinScore)
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    for (const deal of picks) {
+      try {
+        await this.workstationChannel.notify(deal);
+      } catch (err) {
+        console.error(`Falló el aviso de estación de trabajo ${deal.itemId}:`, err);
+      }
+    }
+  }
+
   private async notifyQualified(config: SearchConfig, deals: EvaluatedDeal[]): Promise<void> {
+    await this.notifyWorkstations(config, deals);
+    // Al bot principal no van las que existen solo por el carril ESPECIAL GPU
+    // (pasan los topes normales): esas se ven en el dashboard y, si son
+    // estaciones de trabajo excelentes, en su propio bot.
+    deals = deals.filter((d) => !(d.isGpuSpecial && d.aboveNormalBudget));
     // Primero el umbral de puntaje: lo que no lo supera no se avisa de ninguna
     // forma, ni suelto ni en el resumen. Las CPUs prioritarias no tienen
     // excepción. Las especiales (2 en 1) sí: con el umbral casi ninguna

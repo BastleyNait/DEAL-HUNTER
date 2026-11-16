@@ -41,7 +41,7 @@ export function formatMessage(deal: EvaluatedDeal): string {
   // margen deja. Va como línea propia para que se vea sin abrir el link.
   if (deal.gpu) {
     lines.push(`🎮 GPU dedicada: ${escapeHtml(deal.gpu)}${deal.isGpuDesign ? " — equipo para diseño / AutoCAD" : ""}`);
-    if (deal.isGpuSpecial) lines.push("🎮 ESPECIAL GPU: gráfica de diseño (P620 o mejor), carril aparte hasta $300");
+    if (deal.isGpuSpecial) lines.push("🎮 ESPECIAL GPU: gráfica de diseño (P620 o mejor), carril aparte hasta $500");
   }
   // Grieta o golpe que no descarta: lo que dijo el vendedor, para mirar las fotos.
   if (deal.cosmeticNote) {
@@ -94,6 +94,43 @@ function formatDigest(deals: EvaluatedDeal[]): string {
 }
 
 /** Canal de notificación por Telegram. Implementá otro NotificationChannel (push, WhatsApp) sin tocar esto. */
+/**
+ * Bot aparte (estaciones de trabajo): otro token y destinatarios fijos de una
+ * secret, sin botones (el webhook de reacciones es del bot principal). Si no
+ * está configurado, hunt-deals no lo crea y no se avisa nada por acá.
+ */
+export class TelegramSimpleChannel implements NotificationChannel {
+  constructor(
+    private readonly token: string,
+    private readonly chatIds: string[],
+    private readonly header: string,
+  ) {}
+
+  async notify(deal: EvaluatedDeal): Promise<void> {
+    await this.send(`${this.header}\n${formatMessage(deal)}`);
+  }
+
+  async notifyDigest(deals: EvaluatedDeal[]): Promise<void> {
+    await this.send(formatDigest(deals));
+  }
+
+  private async send(text: string): Promise<void> {
+    const results = await Promise.allSettled(
+      this.chatIds.map(async (chatId) => {
+        const res = await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      }),
+    );
+    const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+    for (const f of failed) console.error("Telegram (bot aparte):", f.reason);
+    if (failed.length === results.length) throw new Error("El bot aparte no le pudo avisar a nadie.");
+  }
+}
+
 export class TelegramNotificationChannel implements NotificationChannel {
   constructor(private readonly supabase: SupabaseClient) {}
 

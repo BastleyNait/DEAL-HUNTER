@@ -5,8 +5,16 @@ import { EbayMarketplaceClient } from "../_shared/infrastructure/ebay-marketplac
 import { SupabaseConfigProvider } from "../_shared/infrastructure/supabase-config-provider.ts";
 import { SupabaseDealRepository } from "../_shared/infrastructure/supabase-deal-repository.ts";
 import { SupabaseRunTracker } from "../_shared/infrastructure/supabase-run-tracker.ts";
-import { TelegramNotificationChannel } from "../_shared/infrastructure/telegram-notification-channel.ts";
+import { TelegramNotificationChannel, TelegramSimpleChannel } from "../_shared/infrastructure/telegram-notification-channel.ts";
 import { createWeightedScoringStrategy } from "../_shared/scoring/weighted-scoring-strategy.ts";
+
+// Bot de estaciones de trabajo: solo si están las dos secrets.
+// TELEGRAM_WORKSTATION_CHAT_IDS: ids separados por coma.
+function workstationChannel(): TelegramSimpleChannel | null {
+  const token = Deno.env.get("TELEGRAM_WORKSTATION_BOT_TOKEN");
+  const chatIds = (Deno.env.get("TELEGRAM_WORKSTATION_CHAT_IDS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return token && chatIds.length > 0 ? new TelegramSimpleChannel(token, chatIds, "🖥️ <b>ESTACIÓN DE TRABAJO</b>") : null;
+}
 
 // Composition root: el único lugar que arma las implementaciones concretas
 // (eBay, Supabase, Telegram) y las inyecta en HuntService. Si algún día se
@@ -33,6 +41,7 @@ Deno.serve(async (req) => {
     new SupabaseDealRepository(supabase),
     (config) => createWeightedScoringStrategy(config),
     new TelegramNotificationChannel(supabase),
+    workstationChannel(),
   );
 
   try {

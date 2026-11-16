@@ -247,32 +247,37 @@ function batteryThresholdRule(config: SearchConfig): ExclusionRule {
  * del presupuesto general. `lenientUrgent` es para el pre-descarte, que no
  * tiene la descripción completa (ver UrgentDealMatcher).
  */
-function priceEligibilityRule(config: SearchConfig, lenientUrgent: boolean): ExclusionRule {
+/**
+ * ¿Entra por los topes normales (general, urgente, 16GB+1TB, marca,
+ * reacondicionado con oferta)? Sin contar el carril ESPECIAL GPU: así se sabe
+ * qué ofertas existen solo por ese carril y no van al bot principal.
+ */
+export function createNormalBudgetCheck(config: SearchConfig) {
   const refurbishedIds = new Set(config.refurbishedConditionIds.map(String));
   const urgentMatcher = createUrgentDealMatcher(config);
   const highSpecMatcher = createHighSpecMatcher(config);
   const brandCaps = (config.brandPriceCaps ?? []).map((c) => ({ re: new RegExp(c.pattern, c.flags), max: c.maxPriceUsd }));
+  return (listing: ListingDetail, lenientUrgent = false): boolean => {
+    if (listing.price == null || listing.price <= config.maxPriceUsd) return true;
+    if (urgentMatcher.isUrgent(listing, { lenient: lenientUrgent })) return true;
+    // 16GB + 1TB: vale pagar más (ver highSpecException).
+    if (highSpecMatcher.isHighSpec(listing, { lenient: lenientUrgent })) return true;
+    // Marcas con tope propio (Lenovo hasta $220).
+    if (brandCaps.some((c) => c.re.test(listing.title) && listing.price! <= c.max)) return true;
+    const isRefurbished = listing.conditionId != null && refurbishedIds.has(listing.conditionId);
+    const hasBestOffer = listing.buyingOptions.includes("BEST_OFFER");
+    return isRefurbished && hasBestOffer && listing.price <= config.refurbishedExceptionMaxPrice;
+  };
+}
+
+function priceEligibilityRule(config: SearchConfig, lenientUrgent: boolean): ExclusionRule {
+  const withinNormalBudget = createNormalBudgetCheck(config);
   return {
     id: "price_over_budget",
     evaluate(listing: ListingDetail) {
-      if (listing.price == null || listing.price <= config.maxPriceUsd) {
-        return { excluded: false };
-      }
-
-      if (urgentMatcher.isUrgent(listing, { lenient: lenientUrgent })) return { excluded: false };
-      // 16GB + 1TB: vale pagar más (ver highSpecException).
-      if (highSpecMatcher.isHighSpec(listing, { lenient: lenientUrgent })) return { excluded: false };
-      // ESPECIAL GPU: gráfica buena, hasta su propio tope ($300).
+      if (withinNormalBudget(listing, lenientUrgent)) return { excluded: false };
+      // ESPECIAL GPU: gráfica buena, hasta su propio tope (gpuSpecial.maxPriceUsd).
       if (isGpuSpecial(listing, config)) return { excluded: false };
-      // Marcas con tope propio (Lenovo hasta $220).
-      if (brandCaps.some((c) => c.re.test(listing.title) && listing.price! <= c.max)) return { excluded: false };
-
-      const isRefurbished = listing.conditionId != null && refurbishedIds.has(listing.conditionId);
-      const hasBestOffer = listing.buyingOptions.includes("BEST_OFFER");
-      if (isRefurbished && hasBestOffer && listing.price <= config.refurbishedExceptionMaxPrice) {
-        return { excluded: false };
-      }
-
       return { excluded: true, reason: "price_over_budget" };
     },
   };

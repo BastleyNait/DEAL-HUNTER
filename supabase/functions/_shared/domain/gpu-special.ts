@@ -31,6 +31,14 @@ const STRONG_GPU_RE = new RegExp(
 const RECENT_WORKSTATION_RE =
   /\bthinkpad\s+p(?:15v?|17|53|52|1)\b|\bp15v\b|\bprecision\s+(?:55[3-7]0|75[3-7]0|77[3-7]0|76[3-7]0)\b/i;
 
+/** "NVIDIA Quadro T2000 4GB", "NVIDIA RTX A3000", "NVIDIA T1200", "AMD Radeon Pro ...", o por modelo. */
+// Las profesionales de entrada (T500, T550, T600, P520) no: van en laptops
+// finas con CPU de bajo consumo, no son estaciones de trabajo "excelentes".
+const ENTRY_PRO_RE = /\b(?:t5[05]0|t600|p5[02]0)\b/i;
+export function isProfessionalGpuLabel(label: string | null): boolean {
+  return label !== null && /quadro|\brtx a\d|nvidia t\d|radeon pro|según el modelo/i.test(label) && !ENTRY_PRO_RE.test(label);
+}
+
 export function isStrongGpu(gpu: DedicatedGpu | null): boolean {
   return gpu !== null && STRONG_GPU_RE.test(gpu.name);
 }

@@ -171,6 +171,11 @@ export interface EvaluatedDeal {
   /** ESPECIAL GPU: gráfica buena (P620 o mejor) a hasta gpuSpecial.maxPriceUsd. */
   isGpuSpecial: boolean;
   /**
+   * Solo entra por el carril ESPECIAL GPU (pasa los topes normales). No se
+   * guarda: sirve para no mandarla al bot principal.
+   */
+  aboveNormalBudget?: boolean;
+  /**
    * Lo que dijo el vendedor de una grieta, golpe o daño estético que no
    * descarta (no es la pantalla ni la bisagra), para revisar las fotos antes
    * de comprar. Null si no menciona nada.
@@ -333,6 +338,14 @@ export interface GpuPriorityConfig {
  */
 export interface GpuSpecialConfig {
   maxPriceUsd: number;
+  /**
+   * Bot aparte de estaciones de trabajo (TELEGRAM_WORKSTATION_BOT_TOKEN): solo
+   * avisa una ESPECIAL GPU con gráfica profesional (Quadro, RTX A, T-series,
+   * Radeon Pro) y puntaje de este número o más. El bot principal no avisa las
+   * que solo entran por este carril (pasan los topes normales): esas se ven en
+   * el dashboard.
+   */
+  workstationAlertMinScore: number;
 }
 
 /**
