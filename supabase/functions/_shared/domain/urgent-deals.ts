@@ -19,13 +19,22 @@ export function createUrgentDealMatcher(config: SearchConfig): UrgentDealMatcher
   const cpuLabels = new Set(urgent.cpuLabels);
   const issueRe = new RegExp(urgent.issuePattern, urgent.issueFlags);
   const issueContextRe = new RegExp(urgent.issueIgnoreContextPattern, "i");
+  const overrides = (urgent.modelOverrides ?? []).map((o) => ({ re: new RegExp(o.pattern, o.flags), max: o.maxPriceUsd }));
+  const mentionsIssue = (text: string) =>
+    mentionsOutsideContext(text, issueRe, { ignoreNegated: true, ignoreContext: issueContextRe });
 
   return {
     isUrgent(listing, options) {
       const lenient = options?.lenient ?? false;
 
-      if (listing.price == null || listing.price > urgent.maxPriceUsd) return false;
+      if (listing.price == null) return false;
       if (listing.buyingOptions.includes("AUCTION")) return false;
+
+      // Modelos urgentes por sí solos (ThinkPad X1 Yoga hasta $250).
+      const override = overrides.find((o) => o.re.test(listing.title));
+      if (override) return listing.price <= override.max && !mentionsIssue(readSpecs(listing).text);
+
+      if (listing.price > urgent.maxPriceUsd) return false;
 
       // Misma lectura de CPU que la selección de candidatos (título y, si no,
       // el resumen): así este criterio y el de la búsqueda no se contradicen.
@@ -35,7 +44,7 @@ export function createUrgentDealMatcher(config: SearchConfig): UrgentDealMatcher
       const specs = readSpecs(listing);
       if (!meetsSpecs(specs, { ramGb: urgent.minRamGb, storageGb: urgent.minStorageGb }, lenient)) return false;
 
-      return !mentionsOutsideContext(specs.text, issueRe, { ignoreNegated: true, ignoreContext: issueContextRe });
+      return !mentionsIssue(specs.text);
     },
   };
 }

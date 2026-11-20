@@ -19,6 +19,7 @@ import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
 import { isDesignGrade } from "../domain/dedicated-gpu.ts";
 import { isGpuSpecial, isProfessionalGpuLabel } from "../domain/gpu-special.ts";
 import { workstationScore } from "../domain/workstation-score.ts";
+import { createPriorityCheck } from "../domain/priority.ts";
 import { createExclusionRules, createNormalBudgetCheck, evaluateExclusions } from "../rules/exclusion-rules.ts";
 import {
   extractBatteryGrade,
@@ -68,7 +69,12 @@ export function selectProfiles(config: SearchConfig, rotationSeed: number): Sear
  * Es un reflejo del scoring real (CPU prioritaria, 16GB, línea que se revende
  * bien, y el precio como desempate), no un criterio aparte.
  */
-function promiseOf(candidate: Candidate, config: SearchConfig, urgentMatcher: UrgentDealMatcher): number {
+function promiseOf(
+  candidate: Candidate,
+  config: SearchConfig,
+  urgentMatcher: UrgentDealMatcher,
+  isPriority: (cpuLabel: string, title: string) => boolean,
+): number {
   const title = candidate.summary.title;
   let promise = candidate.cpuTier * 10;
 
@@ -87,7 +93,7 @@ function promiseOf(candidate: Candidate, config: SearchConfig, urgentMatcher: Ur
   // corrida: es justo lo que se está buscando (llegan ~10 por día).
   if (candidate.specialLabel && !candidate.specialDemoted) promise += 1000;
 
-  if (config.priorityCpus.includes(candidate.cpuLabel)) promise += 40;
+  if (isPriority(candidate.cpuLabel, title)) promise += 40;
   if (extractRamGb(title) >= 16) promise += 35;
 
   const modelTier = config.modelTiers.find((tier) => new RegExp(tier.pattern, tier.flags).test(title));
@@ -152,6 +158,7 @@ export class HuntService {
     const specialMatcher = createSpecialDealMatcher(config);
     const urgentMatcher = createUrgentDealMatcher(config);
     const highSpecMatcher = createHighSpecMatcher(config);
+    const isPriority = createPriorityCheck(config);
     // Dos juegos de reglas: el pre-descarte solo ve título y resumen, y ahí lo
     // que falta saber de una posible OFERTA URGENTE (RAM, disco) no descarta.
     const exclusionRules = createExclusionRules(config);
@@ -222,7 +229,7 @@ export class HuntService {
       // scoring viejo ("más barato = mejor") pero contradice el actual: dejaba
       // el presupuesto en la punta barata y nunca llegaba a las máquinas que
       // realmente se compran.
-      .sort((a, b) => promiseOf(b, config, urgentMatcher) - promiseOf(a, config, urgentMatcher));
+      .sort((a, b) => promiseOf(b, config, urgentMatcher, isPriority) - promiseOf(a, config, urgentMatcher, isPriority));
 
     // 3. Colapsar republicaciones del mismo equipo (mismo título normalizado y
     //    precio), tanto dentro de esta corrida como contra lo ya guardado.
@@ -307,7 +314,7 @@ export class HuntService {
           reason,
           score,
           isGreatDeal,
-          config.priorityCpus.includes(candidate.cpuLabel),
+          isPriority(candidate.cpuLabel, detail.title),
           // Con el detalle completo: la RAM, el disco y los problemas ya se leen de verdad.
           qualifies && urgentMatcher.isUrgent(detail),
           qualifies && highSpecMatcher.isHighSpec(detail),

@@ -149,7 +149,20 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   minBatteryPercent: 70,
   // Las que más te interesan: encabezan el dashboard y van primero en los
   // avisos, siempre que superen notifyScoreAbove.
-  priorityCpus: ["Intel i5 12th gen", "Intel i7 11th gen"],
+  // Las i7 10.ª, 11.ª y 12.ª son las que más salen. La i5 12.ª sigue (3 de las
+  // primeras 6 compras); la i5 11.ª no.
+  priorityCpus: ["Intel i7 12th gen", "Intel i7 11th gen", "Intel i7 10th gen", "Intel i5 12th gen"],
+  // ThinkPad serie X (X1 Carbon/Yoga/Nano, X13, X390...): prioritaria por línea.
+  priorityModels: [
+    {
+      label: "ThinkPad serie X",
+      pattern: "\\bthink\\s*pad\\s*x\\d|\\blenovo\\s*x(?:1|\\d{2,3})\\b|\\bx1\\s*(?:carbon|yoga|nano|extreme|titanium)\\b|\\byoga\\s*x1\\b",
+      flags: "i",
+    },
+  ],
+  // i7 12.ª: se estira hasta $250 (lo más que se paga por una). Las demás
+  // siguen con los topes de siempre.
+  cpuPriceCaps: [{ cpuLabel: "Intel i7 12th gen", maxPriceUsd: 250 }],
   /**
    * Tipo de oferta "2 en 1": laptops convertibles (la pantalla gira 360° o se
    * separa y funcionan como tablet) que además cumplen todo lo demás — precio,
@@ -244,6 +257,8 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     minRamGb: 16,
     minStorageGb: 512,
     cpuLabels: ["Intel i5 12th gen", "Intel i7 11th gen", "AMD Ryzen 7 5000", "AMD Ryzen 5 7000", "AMD Ryzen 7 7000"],
+    // ThinkPad X1 Yoga: urgente siempre que sea compra directa, hasta $250 y sin problemas.
+    modelOverrides: [{ label: "ThinkPad X1 Yoga", pattern: "\\bx1\\s*yoga\\b|\\byoga\\s*x1\\b", flags: "i", maxPriceUsd: 250 }],
     issuePattern:
       "\\b(?:issues?|problems?|defects?|defective|faulty|malfunction\\w*|broken|cracks?|cracked|swollen|(?:not|isn'?t|doesn'?t|don'?t|won'?t|can'?t|cannot)\\s+(?:be\\s+)?(?:working|charging|holding|booting|powering|turning|work|charge|hold|boot|power|turn)|(?:does|will)\\s+not\\s+(?:work|charge|hold|boot|power|turn)|needs?\\s+(?:a\\s+|new\\s+)?(?:battery|repair|replacement|charger)|(?:no|missing|without|bad|dead|weak|worn)\\s+battery(?!\\s+(?:issues?|problems?|wear|degradation|drain))|battery\\s+(?:is\\s+)?(?:missing|dead|bad|weak|worn|issues?|not))\\b",
     issueFlags: "i",
@@ -532,10 +547,11 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       tier: 4,
     },
     {
+      // Bajó de 4 a 3: ya no es prioridad, queda debajo de la i7 10.ª.
       label: "Intel i5 11th gen",
       pattern: "\\bi5[\\s®™_-]*11\\d{2,3}[a-z0-9]{0,3}\\b|(?=.*\\bi5\\b)(?=.*\\b11[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)",
       flags: "i",
-      tier: 4,
+      tier: 3,
     },
     {
       label: "AMD Ryzen 7 4000",

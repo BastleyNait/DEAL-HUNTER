@@ -36,7 +36,7 @@ const LABELS: Record<DealLabelId, DealLabel> = {
   gpu: { id: "gpu", emoji: "🎮", headline: "GPU DEDICADA", chip: "GPU" },
   special: { id: "special", emoji: "🔄", headline: "OFERTA 2 EN 1", chip: "2 EN 1" },
   great: { id: "great", emoji: "🚨", headline: "OFERTAZA", chip: "OFERTAZA" },
-  priority: { id: "priority", emoji: "⭐", headline: "CPU PRIORITARIA", chip: "CPU prioritaria" },
+  priority: { id: "priority", emoji: "⭐", headline: "PRIORITARIA", chip: "Prioritaria" },
 };
 
 /** Orden de jerarquía: el primero que aplica es el encabezado. "priority" no encabeza. */

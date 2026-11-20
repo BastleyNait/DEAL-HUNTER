@@ -366,6 +366,12 @@ export interface UrgentDealConfig {
   /** Etiquetas de cpuPatterns que cuentan (i5 12.ª, i7 11.ª y sus equivalentes Ryzen). */
   cpuLabels: string[];
   /**
+   * Modelos que son OFERTA URGENTE por sí solos, con su propio tope (ThinkPad
+   * X1 Yoga hasta $250): no piden la CPU de cpuLabels ni la RAM/disco mínimos,
+   * pero sí compra directa y que no hable de problemas.
+   */
+  modelOverrides?: { label: string; pattern: string; flags: string; maxPriceUsd: number }[];
+  /**
    * Lo que, dicho sobre el equipo, lo saca de urgente: "issues", batería
    * ausente o mala, "not working"... Se mira en el título y en la descripción.
    * No cuenta si viene negado ("no issues") ni si la oración habla de la
@@ -537,6 +543,10 @@ export interface SearchConfig {
    * Telegram, siempre que superen notifyScoreAbove. Son las etiquetas de cpuPatterns.
    */
   priorityCpus: string[];
+  /** Líneas que van primero aunque la CPU no sea prioritaria (ThinkPad serie X). Por título. */
+  priorityModels?: { label: string; pattern: string; flags: string }[];
+  /** Topes por CPU (etiqueta de cpuPatterns), inclusive: i7 12.ª hasta $250. */
+  cpuPriceCaps?: { cpuLabel: string; maxPriceUsd: number }[];
   /** Tipos de oferta con etiqueta propia, hoy "2 en 1" (ver SpecialDealConfig). */
   specialDeals: SpecialDealConfig[];
   /** El aviso de más alta prioridad: la combinación ideal a buen precio (ver UrgentDealConfig). */

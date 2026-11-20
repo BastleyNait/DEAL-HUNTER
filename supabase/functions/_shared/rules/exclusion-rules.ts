@@ -10,6 +10,7 @@ import {
   mentionsNoStorage,
 } from "../domain/hardware-signals.ts";
 import { createUrgentDealMatcher } from "../domain/urgent-deals.ts";
+import { createCpuMatcher } from "../cpu/cpu-matcher.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { isGpuSpecial } from "../domain/gpu-special.ts";
 
@@ -274,6 +275,8 @@ export function createNormalBudgetCheck(config: SearchConfig) {
   const urgentMatcher = createUrgentDealMatcher(config);
   const highSpecMatcher = createHighSpecMatcher(config);
   const brandCaps = (config.brandPriceCaps ?? []).map((c) => ({ re: new RegExp(c.pattern, c.flags), max: c.maxPriceUsd }));
+  const cpuCaps = new Map((config.cpuPriceCaps ?? []).map((c) => [c.cpuLabel, c.maxPriceUsd]));
+  const cpuMatcher = createCpuMatcher(config);
   return (listing: ListingDetail, lenientUrgent = false): boolean => {
     if (listing.price == null || listing.price <= config.maxPriceUsd) return true;
     if (urgentMatcher.isUrgent(listing, { lenient: lenientUrgent })) return true;
@@ -281,6 +284,12 @@ export function createNormalBudgetCheck(config: SearchConfig) {
     if (highSpecMatcher.isHighSpec(listing, { lenient: lenientUrgent })) return true;
     // Marcas con tope propio (Lenovo hasta $220).
     if (brandCaps.some((c) => c.re.test(listing.title) && listing.price! <= c.max)) return true;
+    // CPUs con tope propio (i7 12.ª hasta $250). Misma lectura de CPU que la búsqueda.
+    if (cpuCaps.size) {
+      const cpu = cpuMatcher.match(listing.title) ?? cpuMatcher.match(`${listing.title} ${listing.shortDescription}`);
+      const cap = cpu ? cpuCaps.get(cpu.label) : undefined;
+      if (cap != null && listing.price <= cap) return true;
+    }
     const isRefurbished = listing.conditionId != null && refurbishedIds.has(listing.conditionId);
     const hasBestOffer = listing.buyingOptions.includes("BEST_OFFER");
     return isRefurbished && hasBestOffer && listing.price <= config.refurbishedExceptionMaxPrice;
