@@ -11,6 +11,7 @@ import {
 } from "../domain/hardware-signals.ts";
 import { createUrgentDealMatcher } from "../domain/urgent-deals.ts";
 import { createCpuMatcher } from "../cpu/cpu-matcher.ts";
+import { lowSpecReason } from "../domain/min-specs.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { isGpuSpecial } from "../domain/gpu-special.ts";
 
@@ -149,6 +150,17 @@ function unitFailureRule(): ExclusionRule {
 }
 
 /** Sin RAM: no se revende sin comprarle memoria. Título y descripción. */
+/** 16GB de RAM sí o sí y disco de 256GB o más (ver domain/min-specs.ts). */
+function minSpecsRule(): ExclusionRule {
+  return {
+    id: "below_min_specs",
+    evaluate(listing: ListingDetail) {
+      const reason = lowSpecReason(listing);
+      return reason ? { excluded: true, reason } : { excluded: false };
+    },
+  };
+}
+
 function missingRamRule(): ExclusionRule {
   return {
     id: "missing_ram",
@@ -323,6 +335,7 @@ export function createExclusionRules(config: SearchConfig, lenientUrgent = false
     declaredDamageRule(),
     unitFailureRule(),
     missingRamRule(),
+    minSpecsRule(),
     crackedRule(),
     screenOrKeyboardDefectRule(),
     implausiblePriceRule(config),

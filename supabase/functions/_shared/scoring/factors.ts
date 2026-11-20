@@ -74,7 +74,9 @@ export const batteryFactor: ScoreFactor = {
  */
 export const ramFactor: ScoreFactor = {
   id: "ram",
-  weight: 0.2,
+  // Era 0.2. Con 16GB obligatorio (domain/min-specs.ts) casi no distingue: la
+  // mitad del peso pasó al disco.
+  weight: 0.1,
   score(listing: ListingDetail) {
     const gb = extractRamGb(`${listing.title} ${listing.descriptionText}`);
     if (gb >= 16) return 1;
@@ -85,16 +87,17 @@ export const ramFactor: ScoreFactor = {
 };
 
 /**
- * 256GB no penaliza: es lo que traían 5 de las 6 compras. Lo que penaliza es
- * menos que eso.
+ * 512GB va por delante de 256GB (pedido explícito); menos de 256 ni siquiera
+ * llega acá (domain/min-specs.ts). Peso 0.18: una de 256 queda ~9 puntos
+ * debajo de la misma con 512.
  */
 export const storageFactor: ScoreFactor = {
   id: "storage",
-  weight: 0.08,
+  weight: 0.18,
   score(listing: ListingDetail) {
     const gb = extractStorageGb(`${listing.title} ${listing.descriptionText}`);
     if (gb >= 512) return 1;
-    if (gb >= 256) return 0.85;
+    if (gb >= 256) return 0.5;
     if (gb >= 128) return 0.3;
     return 0;
   },
