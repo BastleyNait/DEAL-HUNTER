@@ -334,10 +334,12 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * Las que solo entran por acá no van al bot principal (se ven en el
    * dashboard); el bot de estaciones de trabajo avisa solo las profesionales
    * con puntaje de estación (domain/workstation-score.ts) de
-   * workstationAlertMinScore o más: 80 es, por ejemplo, una P15v con P620 a
-   * $190 o una RTX A2000 a $300.
+   * workstationAlertMinScore o más. Con 80 no llegó nada desde que existe el
+   * bot (16 nov): lo máximo visto fue 77. 65 deja pasar, por ejemplo, una
+   * P620 a ~$200, una T1000 a $284, una T2000 a $350 o una RTX 4000 a $440;
+   * quedan fuera una T1000 a $300 o una P620 a $230.
    */
-  gpuSpecial: { maxPriceUsd: 500, workstationAlertMinScore: 80 },
+  gpuSpecial: { maxPriceUsd: 500, workstationAlertMinScore: 65 },
   newListingProfiles: [
     { query: "(1135g7, 1145g7, 1155g7, 1165g7, 1185g7, 1195g7)", sort: "newlyListed", maxPages: 1 },
     { query: "(11300h, 11320h, 11370h, 11375h, 11390h, 11400h, 11800h, 11850h)", sort: "newlyListed", maxPages: 1 },
