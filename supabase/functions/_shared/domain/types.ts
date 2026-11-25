@@ -487,6 +487,12 @@ export interface SearchConfig {
    * aparte porque el mínimo de arriba también se guarda en la fila de config.
    */
   sellerTrustTiers?: { minFeedbackScore: number; minFeedbackPercentage: number }[];
+  /**
+   * Puntos que se restan por cada usdPerPoint por encima de maxPriceUsd, hasta
+   * maxPoints. Sin esto, todo lo que pasa de $200 puntuaba igual sin importar
+   * el precio.
+   */
+  overBudgetPenalty?: { usdPerPoint: number; maxPoints: number };
   /** Estaciones de trabajo cuya generación de CPU se deduce del modelo (ver WorkstationModelConfig). */
   workstationModels?: WorkstationModelConfig[];
   // Excepción para reacondicionados con "Best Offer": el precio de lista puede

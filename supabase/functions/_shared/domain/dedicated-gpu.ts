@@ -76,3 +76,6 @@ export function detectDedicatedGpu(text: string, aspects: ListingAspect[] = []):
 export function isDesignGrade(gpu: DedicatedGpu | null): gpu is DedicatedGpu {
   return gpu !== null && (gpu.professional || (gpu.vramGb ?? 0) >= 4);
 }
+
+/** Profesionales de entrada (P520, T500, T550, T600): no cuentan como la P620 o mejor. */
+export const ENTRY_PRO_RE = /\b(?:t5[05]0|t600|p5[02]0)\b/i;

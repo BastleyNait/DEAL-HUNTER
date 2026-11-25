@@ -1,5 +1,5 @@
 import type { GpuPriorityConfig, ListingDetail, ListingSummary } from "./types.ts";
-import { detectDedicatedGpu, isDesignGrade, type DedicatedGpu } from "./dedicated-gpu.ts";
+import { detectDedicatedGpu, ENTRY_PRO_RE, isDesignGrade, type DedicatedGpu } from "./dedicated-gpu.ts";
 
 /**
  * Prioridad de las laptops con gráfica dedicada (ver GpuPriorityConfig).
@@ -43,6 +43,10 @@ const WORKSTATION_MODEL_RE = /\bthinkpad\s+p(?:15v|1|17|50|51|52|53|72|73)\b|\bp
 /** Puntos que suma al puntaje (0 si no tiene gráfica dedicada). */
 export function gpuScoreBonus(gpu: DedicatedGpu | null, config: GpuPriorityConfig): number {
   if (!gpu) return 0;
+  // Las profesionales de entrada (P520, T500, T550, T600) no son la P620 o
+  // mejor que deja el margen grande: suman como una GeForce chica. Una P15s
+  // con P520 a $230 sacaba 89, casi lo mismo que una P15v con P620 a $199.
+  if (ENTRY_PRO_RE.test(gpu.name)) return config.otherBonus;
   return isDesignGrade(gpu) ? config.designGradeBonus : config.otherBonus;
 }
 

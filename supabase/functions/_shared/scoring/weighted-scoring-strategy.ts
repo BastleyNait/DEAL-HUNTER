@@ -27,9 +27,17 @@ export function createWeightedScoringStrategy(
       // acota también por arriba.
       // Y una gráfica dedicada suma: es el tipo de laptop que más margen deja.
       const gpuBonus = gpuScoreBonus(gpuOf(listing), config.gpuPriority);
+      // Por encima del tope general ($200) el factor de precio ya está en 0 y
+      // no restaba más: una P15v con P620 a $299 sacaba 95, igual que a $199.
+      // Ahora cada pocos dólares de más resta un punto, hasta un máximo.
+      const over = config.overBudgetPenalty;
+      const overPoints =
+        over && listing.price != null && listing.price > ctx.maxPriceUsd
+          ? Math.min(over.maxPoints, (listing.price - ctx.maxPriceUsd) / over.usdPerPoint)
+          : 0;
       const score = Math.min(
         100,
-        Math.max(0, Math.round(weighted * 100) - penaltyPoints(penalties, listing) + gpuBonus),
+        Math.max(0, Math.round(weighted * 100 - overPoints) - penaltyPoints(penalties, listing) + gpuBonus),
       );
 
       // Una subasta nunca es "ofertaza": el precio que vemos es la puja actual,

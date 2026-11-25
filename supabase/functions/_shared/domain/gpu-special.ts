@@ -1,5 +1,5 @@
 import type { ListingDetail, ListingSummary, SearchConfig } from "./types.ts";
-import type { DedicatedGpu } from "./dedicated-gpu.ts";
+import { ENTRY_PRO_RE, type DedicatedGpu } from "./dedicated-gpu.ts";
 import { gpuOf } from "./gpu-priority.ts";
 
 /**
@@ -34,7 +34,6 @@ const RECENT_WORKSTATION_RE =
 /** "NVIDIA Quadro T2000 4GB", "NVIDIA RTX A3000", "NVIDIA T1200", "AMD Radeon Pro ...", o por modelo. */
 // Las profesionales de entrada (T500, T550, T600, P520) no: van en laptops
 // finas con CPU de bajo consumo, no son estaciones de trabajo "excelentes".
-const ENTRY_PRO_RE = /\b(?:t5[05]0|t600|p5[02]0)\b/i;
 export function isProfessionalGpuLabel(label: string | null): boolean {
   return label !== null && /quadro|\brtx a\d|nvidia t\d|radeon pro|según el modelo/i.test(label) && !ENTRY_PRO_RE.test(label);
 }

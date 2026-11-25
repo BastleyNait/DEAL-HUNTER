@@ -5,9 +5,14 @@
  * a $495 sacaba 100 y una P15v con P620 a menos de $200 —la mejor compra
  * hasta ahora— sacaba menos.
  *
- *   65%  precio contra la banda de su clase (100 en "buen precio" o menos, 0 en "caro" o más)
- *   15%  clase de gráfica (entrada 25, media 50, alta 75, tope 100)
- *   20%  puntaje general (CPU, RAM, disco, estado)
+ *   75%  precio contra la banda de su clase (100 en "buen precio" o menos, 0 en "caro" o más)
+ *   25%  puntaje general (CPU, RAM, disco, estado)
+ *
+ * La clase de la gráfica pesa a través de la banda: una de entrada (P620) a
+ * su buen precio vale tanto como una alta (RTX A2000) al suyo. La referencia
+ * es una compra real: P15v con P620 4GB a $199, de las que más ganancia
+ * dejaron, tiene que dar ~95-100 (da 98). Antes daba 76 y la clase sumaba
+ * apenas 4 puntos a la P620.
  *
  * Bandas sacadas de los precios de compra directa vistos en eBay (nov 2026):
  * entrada, mediana $240 y p10 $160; media, mediana $390.
@@ -31,10 +36,10 @@ export function gpuClass(label: string | null): GpuClass {
 
 /** [buen precio, caro] por clase. */
 const PRICE_BANDS: Record<GpuClass, [number, number]> = {
-  1: [180, 300],
-  2: [200, 450],
-  3: [250, 500],
-  4: [320, 600],
+  1: [200, 300],
+  2: [250, 450],
+  3: [300, 500],
+  4: [380, 600],
 };
 
 /**
@@ -50,6 +55,6 @@ export function workstationScore(
   const cls = gpuClass(gpuLabel);
   const [good, bad] = PRICE_BANDS[cls];
   const priceValue = isAuction ? 0.5 : price == null ? 0 : Math.max(0, Math.min(1, (bad - price) / (bad - good)));
-  const score = 65 * priceValue + 15 * (cls / 4) + 0.2 * (baseScore ?? 0);
+  const score = 75 * priceValue + 0.25 * (baseScore ?? 0);
   return Math.round(Math.max(0, Math.min(100, score)));
 }

@@ -34,6 +34,9 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   // O 200+ ventas con 99%+: vendedores chicos pero impecables. Una P15s Gen 1
   // a $230-250 de un vendedor con 202 ventas al 100% se descartaba.
   sellerTrustTiers: [{ minFeedbackScore: 200, minFeedbackPercentage: 99 }],
+  // 1 punto cada $4 por encima de $200, hasta 15 (a $260). Una P15s con P520 a
+  // $230 baja de 89 a ~75; la referencia (P15v con P620 a $199) no cambia.
+  overBudgetPenalty: { usdPerPoint: 4, maxPoints: 15 },
   workstationModels: DEFAULT_WORKSTATION_MODELS,
   // Reacondicionados (2000/2500) con "Best Offer" habilitado pueden listar hasta
   // acá: la idea es ofertar y bajar el precio final a <= maxPriceUsd antes de
@@ -342,12 +345,21 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
       maxPages: 1,
       maxPriceUsd: 500,
     },
-    // Por modelo, aunque no digan la gráfica ni la CPU: ThinkPad P15 y las
-    // estaciones de trabajo HP y Dell de 10.ª a 12.ª. La de arriba trae 2.500+
-    // resultados y sus 100 más nuevos cubren apenas ~30 horas. +96 llamadas por día.
+    // Por modelo, aunque no digan la gráfica ni la CPU. La de arriba trae
+    // 2.500+ resultados y sus 100 más nuevos cubren apenas ~30 horas: una P15s
+    // Gen 1 a $230 se cayó de ahí en un día. Separadas, medido en vivo:
+    // ThinkPad P ~280 resultados (los 100 más nuevos = ~12 días); HP/Dell
+    // ~1.400 (~35 horas). Juntas eran ~1.600 y la P15s quedaba afuera.
+    // +192 llamadas por día.
+    {
+      query: '(p15s, p15v, p14s, "p15 gen", "p1 gen", "p17 gen")',
+      sort: "newlyListed",
+      maxPages: 1,
+      maxPriceUsd: 500,
+    },
     {
       query:
-        '("p15 gen", "p15s gen", "p15v gen", "p14s gen", "p1 gen", "zbook firefly", "zbook power", "zbook studio", "zbook fury", "precision 3550", "precision 3560", "precision 3570", "precision 5560", "precision 5570", "precision 7550", "precision 7560")',
+        '("zbook firefly", "zbook power", "zbook studio", "zbook fury", "precision 3550", "precision 3560", "precision 3570", "precision 5560", "precision 5570", "precision 7550", "precision 7560")',
       sort: "newlyListed",
       maxPages: 1,
       maxPriceUsd: 500,
@@ -360,12 +372,12 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * Las que solo entran por acá no van al bot principal (se ven en el
    * dashboard); el bot de estaciones de trabajo avisa solo las profesionales
    * con puntaje de estación (domain/workstation-score.ts) de
-   * workstationAlertMinScore o más. Con 80 no llegó nada desde que existe el
-   * bot (16 nov): lo máximo visto fue 77. 65 deja pasar, por ejemplo, una
-   * P620 a ~$200, una T1000 a $284, una T2000 a $350 o una RTX 4000 a $440;
-   * quedan fuera una T1000 a $300 o una P620 a $230.
+   * workstationAlertMinScore o más. Con la escala recalibrada (P15v con P620
+   * a $199 = 98), 70 deja pasar, por ejemplo, una P620 a $230, una T1000 a
+   * $300, una T2000 a $350 o una RTX 4000 a $440: ~12 en los 8 días desde
+   * que existe el bot. Una T1000 a $329 o una T2000 a $380 quedan fuera.
    */
-  gpuSpecial: { maxPriceUsd: 500, workstationAlertMinScore: 65 },
+  gpuSpecial: { maxPriceUsd: 500, workstationAlertMinScore: 70 },
   newListingProfiles: [
     { query: "(1135g7, 1145g7, 1155g7, 1165g7, 1185g7, 1195g7)", sort: "newlyListed", maxPages: 1 },
     { query: "(11300h, 11320h, 11370h, 11375h, 11390h, 11400h, 11800h, 11850h)", sort: "newlyListed", maxPages: 1 },
