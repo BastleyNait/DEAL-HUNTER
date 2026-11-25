@@ -1,4 +1,5 @@
 import type { SearchConfig } from "./types.ts";
+import { DEFAULT_WORKSTATION_MODELS } from "./workstation-models.ts";
 
 /**
  * Valores por defecto. Son los que pediste al armar esto: laptops i7 10ma/11va,
@@ -30,6 +31,10 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   minFixedPriceUsd: 25,
   minSellerFeedbackScore: 1000,
   minSellerFeedbackPercentage: 98,
+  // O 200+ ventas con 99%+: vendedores chicos pero impecables. Una P15s Gen 1
+  // a $230-250 de un vendedor con 202 ventas al 100% se descartaba.
+  sellerTrustTiers: [{ minFeedbackScore: 200, minFeedbackPercentage: 99 }],
+  workstationModels: DEFAULT_WORKSTATION_MODELS,
   // Reacondicionados (2000/2500) con "Best Offer" habilitado pueden listar hasta
   // acá: la idea es ofertar y bajar el precio final a <= maxPriceUsd antes de
   // comprar. Ver rules/exclusion-rules.ts -> priceEligibilityRule.
@@ -281,7 +286,18 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
    * directa entre $200 y $220 se descartaban por precio (T14s i7 16GB/512GB a
    * $205, T14 Ryzen 7 PRO 16GB/512GB a $220...).
    */
-  brandPriceCaps: [{ label: "Lenovo", pattern: "\\b(?:lenovo|thinkpad|think\\s*pad|thinkbook)\\b", flags: "i", maxPriceUsd: 220 }],
+  brandPriceCaps: [
+    { label: "Lenovo", pattern: "\\b(?:lenovo|thinkpad|think\\s*pad|thinkbook)\\b", flags: "i", maxPriceUsd: 220 },
+    // Estaciones de trabajo confiables (ThinkPad P, HP ZBook, Dell Precision):
+    // de las que más ganancia dejan, y casi nunca bajan de $220. La CPU igual
+    // tiene que ser de las buscadas (i7 10.ª-12.ª, i5 11.ª-12.ª).
+    {
+      label: "Estación de trabajo",
+      pattern: "\\bthink\\s*pad\\s*p\\d|\\bp1[457][sv]?\\s*(?:gen|g)\\s*\\d|\\bp1\\s*gen\\s*\\d|\\bzbook\\b|\\bprecision\\b",
+      flags: "i",
+      maxPriceUsd: 260,
+    },
+  ],
   /**
    * Se escapaban publicaciones buenas. Auditado contra eBay en vivo (468
    * publicaciones de 48 h con las CPUs buscadas): 48 tenían una CPU que el
@@ -322,6 +338,16 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     {
       query:
         '(p15v, p15s, p14s, p1, p53, p52, p51, p17, "precision 5540", "precision 5550", "precision 7540", "precision 3541", "precision 3551", zbook)',
+      sort: "newlyListed",
+      maxPages: 1,
+      maxPriceUsd: 500,
+    },
+    // Por modelo, aunque no digan la gráfica ni la CPU: ThinkPad P15 y las
+    // estaciones de trabajo HP y Dell de 10.ª a 12.ª. La de arriba trae 2.500+
+    // resultados y sus 100 más nuevos cubren apenas ~30 horas. +96 llamadas por día.
+    {
+      query:
+        '("p15 gen", "p15s gen", "p15v gen", "p14s gen", "p1 gen", "zbook firefly", "zbook power", "zbook studio", "zbook fury", "precision 3550", "precision 3560", "precision 3570", "precision 5560", "precision 5570", "precision 7550", "precision 7560")',
       sort: "newlyListed",
       maxPages: 1,
       maxPriceUsd: 500,

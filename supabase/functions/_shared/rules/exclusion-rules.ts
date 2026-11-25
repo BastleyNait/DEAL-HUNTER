@@ -44,6 +44,21 @@ function sellerReputationRule(config: SearchConfig): ExclusionRule {
     evaluate(listing: ListingDetail) {
       const { sellerFeedbackScore: score, sellerFeedbackPercentage: pct } = listing;
 
+      // Basta con cumplir una de las combinaciones: 1000+ ventas con 98%+, o
+      // las de sellerTrustTiers (200+ ventas con 99%+). Un dato que falta no descarta.
+      const tiers = [
+        { minFeedbackScore: config.minSellerFeedbackScore, minFeedbackPercentage: config.minSellerFeedbackPercentage },
+        ...(config.sellerTrustTiers ?? []),
+      ];
+      const passes = tiers.some(
+        (t) => (score === null || score >= t.minFeedbackScore) && (pct === null || pct >= t.minFeedbackPercentage),
+      );
+      if (passes) return { excluded: false };
+      const lowestScore = Math.min(...tiers.map((t) => t.minFeedbackScore));
+      if (score !== null && score < lowestScore) return { excluded: true, reason: `seller_only_${score}_sales` };
+      // Tiene ventas para alguna combinación, pero no el porcentaje que esa pide.
+      if (pct !== null && score !== null) return { excluded: true, reason: `seller_${score}_sales_${pct}pct` };
+
       if (score !== null && score < config.minSellerFeedbackScore) {
         return { excluded: true, reason: `seller_only_${score}_sales` };
       }

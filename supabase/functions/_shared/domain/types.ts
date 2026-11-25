@@ -399,6 +399,20 @@ export interface HighSpecExceptionConfig {
  * Tope de precio propio de una marca, mayor que `maxPriceUsd`: las ThinkPad se
  * revenden mejor y en eBay casi nunca bajan de $200. Se reconoce por el título.
  */
+/**
+ * Estación de trabajo (ThinkPad P, ZBook, Precision) que muchas veces se
+ * publica sin el modelo de CPU: "ThinkPad P15s Gen 1 16GB 256GB" y en los
+ * datos solo "Intel Core i7". La generación sale del modelo (P15s Gen 1 =
+ * 10.ª); la familia (i5/i7) del título o, si no está, de los datos del
+ * detalle. Solo se usa cuando el matcher normal de CPU no encuentra nada.
+ */
+export interface WorkstationModelConfig {
+  label: string;
+  pattern: string;
+  flags: string;
+  impliedIntelGeneration: number;
+}
+
 export interface BrandPriceCapConfig {
   label: string;
   pattern: string;
@@ -466,6 +480,15 @@ export interface SearchConfig {
    */
   minSellerFeedbackScore: number;
   minSellerFeedbackPercentage: number;
+  /**
+   * Otras combinaciones de reputación que también alcanzan: con pocas ventas
+   * vale si el feedback es casi perfecto (200+ ventas con 99%+). Si cumple
+   * cualquiera de estas O el mínimo de arriba, el vendedor pasa. Es clave
+   * aparte porque el mínimo de arriba también se guarda en la fila de config.
+   */
+  sellerTrustTiers?: { minFeedbackScore: number; minFeedbackPercentage: number }[];
+  /** Estaciones de trabajo cuya generación de CPU se deduce del modelo (ver WorkstationModelConfig). */
+  workstationModels?: WorkstationModelConfig[];
   // Excepción para reacondicionados con "Best Offer": el precio de lista puede
   // llegar hasta acá, porque la intención es negociar por debajo de maxPriceUsd
   // antes de comprar (ver rules/exclusion-rules.ts -> priceEligibilityRule).

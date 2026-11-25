@@ -13,6 +13,7 @@ import type {
 } from "../domain/types.ts";
 import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
 import { createSpecialDealMatcher } from "../domain/special-deals.ts";
+import { createWorkstationModelMatcher } from "../domain/workstation-models.ts";
 import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgent-deals.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
@@ -38,6 +39,11 @@ interface Candidate {
   cpuTier: number;
   specialLabel: string | null;
   specialDemoted: boolean;
+  /**
+   * Estación de trabajo con la CPU deducida del modelo sin saber si es i5 o
+   * i7: se confirma con los datos del detalle (ver workstation-models.ts).
+   */
+  workstationGeneration?: number;
 }
 
 /**
@@ -156,6 +162,7 @@ export class HuntService {
     const config = await this.configProvider.getConfig();
     const cpuMatcher = createCpuMatcher(config);
     const specialMatcher = createSpecialDealMatcher(config);
+    const workstationMatcher = createWorkstationModelMatcher(config);
     const urgentMatcher = createUrgentDealMatcher(config);
     const highSpecMatcher = createHighSpecMatcher(config);
     const isPriority = createPriorityCheck(config);
@@ -195,10 +202,14 @@ export class HuntService {
           // reconocible, se deduce la generación del modelo (serie J = 11.ª):
           // sin esto se descartaban acá, antes de evaluarse siquiera.
           const special = specialMatcher.match(item.title);
-          const cpu =
+          const known =
             cpuMatcher.match(item.title) ??
             cpuMatcher.match(`${item.title} ${item.shortDescription}`) ??
             (special ? specialMatcher.inferCpu(item.title, special) : null);
+          // Estaciones de trabajo (P15s Gen 1, ZBook G8, Precision 3560...): la
+          // generación sale del modelo aunque el título no diga la CPU.
+          const workstation = known ? null : workstationMatcher.infer(item.title, item.shortDescription ?? "");
+          const cpu = known ?? workstation;
           if (cpu) {
             candidates.set(item.id, {
               summary: item,
@@ -206,6 +217,7 @@ export class HuntService {
               cpuTier: cpu.tier,
               specialLabel: special?.label ?? null,
               specialDemoted: special ? specialMatcher.isDemoted(item.title, special) : false,
+              workstationGeneration: workstation?.familyAssumed ? workstation.generation : undefined,
             });
           }
         }
@@ -293,7 +305,21 @@ export class HuntService {
 
         stats.candidatesChecked++;
         const detail = await this.marketplace.getDetail(candidate.summary.id);
-        const { qualifies, reason } = evaluateExclusions(exclusionRules, detail);
+        let { qualifies, reason } = evaluateExclusions(exclusionRules, detail);
+        // La familia de una estación de trabajo se había supuesto (i7): acá se
+        // confirma con el dato "Processor" del detalle, o se descarta.
+        if (candidate.workstationGeneration != null) {
+          const confirmed = workstationMatcher.confirmFamily(detail, candidate.workstationGeneration);
+          if ("rejectReason" in confirmed) {
+            if (qualifies) {
+              qualifies = false;
+              reason = confirmed.rejectReason;
+            }
+          } else {
+            candidate.cpuLabel = confirmed.label;
+            candidate.cpuTier = confirmed.tier;
+          }
+        }
 
         let score: number | null = null;
         let isGreatDeal = false;
