@@ -169,6 +169,15 @@ Deno.serve(async (req) => {
 
   // Encolar para Facebook solo toca la tabla publications: no necesita
   // eBay ni las credenciales de la tienda, así que tampoco se las exige.
+  // Interruptor "Auto-publicar" del panel de Facebook: el publicador lo lee
+  // antes de cada aviso y, si está encendido, publica sin esperar el click.
+  if (body.action === "facebook-auto") {
+    if (typeof body.enabled !== "boolean") return json({ error: "Falta enabled (true/false)." }, 400);
+    const { error } = await supabase.from("publisher_status").upsert({ id: 1, auto_publish: body.enabled });
+    if (error) return json({ error: error.message }, 500);
+    return json({ data: { autoPublish: body.enabled } });
+  }
+
   if (body.action === "facebook-queue") {
     try {
       const ids = Array.isArray(body.itemIds) ? body.itemIds.map(String) : undefined;
