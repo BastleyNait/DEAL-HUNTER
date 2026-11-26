@@ -58,7 +58,10 @@ const NULL_PUBLICATION_REPOSITORY: PublicationRepository = {
  * puede leer esa fila.
  */
 async function canReadPublication(req: Request, itemId: unknown): Promise<boolean> {
-  const key = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  // supabase-js 2.1xx manda las keys nuevas (sb_secret_...) solo en `apikey`,
+  // sin Authorization: sin este fallback el publicador recibía Unauthorized.
+  const key =
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || req.headers.get("apikey") || "";
   if (!key || typeof itemId !== "string" || !itemId) return false;
   const { data, error } = await createClient(Deno.env.get("SUPABASE_URL")!, key, {
     auth: { persistSession: false },
