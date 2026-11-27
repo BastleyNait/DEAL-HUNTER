@@ -45,7 +45,7 @@ const TYPICAL_VRAM_GB: Record<string, number> = {
   P520: 2, P620: 4, P1000: 4, P2000: 4, T500: 4, T550: 4, T600: 4, T1000: 4, T1200: 4, T2000: 4,
   A500: 4, A1000: 4, A2000: 4, "GTX 1650": 4, "GTX 1650 TI": 4, "GTX 1660 TI": 6, "RTX 2050": 4, "RTX 3050": 4,
   "RTX 3060": 6, "RTX 3070": 8, "RTX 3080": 8, "GTX 1050 TI": 4, "GTX 1060": 6, "GTX 1070": 8,
-  "GTX 1660": 6, "RTX 2060": 6, "RTX 2070": 8, "RTX 2080": 8, "RTX 4050": 6, "RTX 4060": 8, "RTX 4070": 8, MX250: 2, MX330: 2, MX350: 2, MX450: 2, MX550: 2, "WX 3200": 4,
+  "GTX 1660": 6, "RTX 2060": 6, "RTX 3000": 6, "RTX 4000": 8, "RTX 5000": 16, A3000: 6, A4000: 8, A5000: 16, P3200: 6, P4200: 8, P5200: 16, "RTX 2070": 8, "RTX 2080": 8, "RTX 4050": 6, "RTX 4060": 8, "RTX 4070": 8, MX250: 2, MX330: 2, MX350: 2, MX450: 2, MX550: 2, "WX 3200": 4,
 };
 
 const VRAM_RE = /(\d{1,2})\s?gb\s*(?:of\s+)?(?:gddr\d\w*|vram|dedicated|video|graphics|gpu)\b|(?:gddr\d\w*|vram)\D{0,8}(\d{1,2})\s?gb\b/i;
@@ -79,3 +79,16 @@ export function isDesignGrade(gpu: DedicatedGpu | null): gpu is DedicatedGpu {
 
 /** Profesionales de entrada (P520, T500, T550, T600): no cuentan como la P620 o mejor. */
 export const ENTRY_PRO_RE = /\b(?:t5[05]0|t600|p5[02]0)\b/i;
+
+/**
+ * Memoria de video de una gráfica ya guardada ("NVIDIA Quadro T1000 4GB",
+ * "NVIDIA Quadro RTX 4000"): la que diga la etiqueta o, si no, la típica del
+ * modelo. null si no se sabe (p. ej. "según el modelo"): no se adivina.
+ */
+export function vramOfLabel(label: string | null): number | null {
+  if (!label) return null;
+  const said = label.match(/(\d{1,2})\s?GB\b/i);
+  if (said) return Number(said[1]);
+  const key = label.replace(/^NVIDIA (?:Quadro |RTX |GeForce )?|^AMD Radeon (?:Pro )?/i, "").toUpperCase().trim();
+  return TYPICAL_VRAM_GB[key] ?? null;
+}

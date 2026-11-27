@@ -17,7 +17,7 @@ import { createWorkstationModelMatcher, isWorkstationTitle } from "../domain/wor
 import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgent-deals.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
-import { isDesignGrade } from "../domain/dedicated-gpu.ts";
+import { isDesignGrade, vramOfLabel } from "../domain/dedicated-gpu.ts";
 import { isGpuSpecial, isProfessionalGpuLabel } from "../domain/gpu-special.ts";
 import { workstationScore } from "../domain/workstation-score.ts";
 import { createPriorityCheck } from "../domain/priority.ts";
@@ -531,6 +531,15 @@ export class HuntService {
       // ESPECIAL GPU: de 160 que calificaron en una semana se avisaron 8, y se
       // escapaban ZBook Firefly G8 a $190 o Precision 3551 a $185.
       .filter((d) => isWorkstationTitle(d.title) || (d.isGpuSpecial && isProfessionalGpuLabel(d.gpu)))
+      // Sin gráfica dedicada no sirve como estación de trabajo. 4GB o más
+      // siempre; 2GB (P520, MX) solo por debajo de $200. Si la memoria no se
+      // sabe, no se avisa. Las i5 (10.ª a 12.ª) no van a este bot.
+      .filter((d) => {
+        const vram = vramOfLabel(d.gpu);
+        if (vram == null) return false;
+        return vram >= 4 || (vram >= 2 && d.price != null && d.price < 200);
+      })
+      .filter((d) => !/^Intel i5\b/.test(d.cpuMatch ?? ""))
       .map((d) => ({ ...d, score: workstationScore(d.price, d.gpu, d.score, d.isAuction) }))
       .filter((d) => d.score >= config.gpuSpecial.workstationAlertMinScore)
       .sort((a, b) => b.score - a.score);
