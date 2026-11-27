@@ -13,7 +13,7 @@ import type {
 } from "../domain/types.ts";
 import { createCpuMatcher, maxCpuTier } from "../cpu/cpu-matcher.ts";
 import { createSpecialDealMatcher } from "../domain/special-deals.ts";
-import { createWorkstationModelMatcher } from "../domain/workstation-models.ts";
+import { createWorkstationModelMatcher, isWorkstationTitle } from "../domain/workstation-models.ts";
 import { createUrgentDealMatcher, type UrgentDealMatcher } from "../domain/urgent-deals.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { gpuLabel, gpuOf } from "../domain/gpu-priority.ts";
@@ -25,10 +25,12 @@ import { createExclusionRules, createNormalBudgetCheck, evaluateExclusions } fro
 import {
   extractBatteryGrade,
   extractRamGb,
+  extractStorageGb,
   findCosmeticNote,
   hasMeaningfulDescription,
   listingFingerprint,
   mentionsBattery,
+  mentionsNoStorage,
 } from "../domain/hardware-signals.ts";
 
 const PAGE_SIZE = 100;
@@ -641,7 +643,7 @@ export class HuntService {
       // Una ESPECIAL GPU siempre es de diseño: se avisa primero y no se pierde por el umbral.
       isGpuDesign: isDesignGrade(gpu) || isGpuSpecialDeal,
       isGpuSpecial: isGpuSpecialDeal,
-      cosmeticNote: findCosmeticNote(listing.title, listing.descriptionText),
+      cosmeticNote: withNoDiskNote(findCosmeticNote(listing.title, listing.descriptionText), listing),
       hasDescription: hasMeaningfulDescription(listing.descriptionText),
       hasBatteryInfo: mentionsBattery(text),
       batteryGrade: extractBatteryGrade(text),
@@ -659,4 +661,14 @@ export class HuntService {
       fingerprint: listingFingerprint(listing.title, listing.price),
     };
   }
+}
+
+/**
+ * Estación de trabajo que se dejó pasar sin disco (ver missingStorageRule):
+ * se avisa en la nota, para comprar el SSD aparte.
+ */
+function withNoDiskNote(note: string | null, listing: ListingDetail): string | null {
+  const text = `${listing.title} ${listing.descriptionText}`;
+  if (!isWorkstationTitle(listing.title) || !mentionsNoStorage(text) || extractStorageGb(text) > 0) return note;
+  return note ? `sin disco · ${note}` : "sin disco: hay que comprarle un SSD";
 }

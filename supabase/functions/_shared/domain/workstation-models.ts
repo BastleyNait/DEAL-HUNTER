@@ -29,6 +29,10 @@ export const WORKSTATION_TITLE_PATTERN =
   "\\bthink\\s*pad\\s*p\\d|\\bp1[457][sv]?\\s*(?:gen|g)\\s*\\d|\\bp1\\s*gen\\s*\\d|\\b(?:lenovo|thinkpad)\\b.*\\bp[57][23]\\b|\\bzbook\\b|\\bprecision\\b";
 const WORKSTATION_TITLE_RE = new RegExp(WORKSTATION_TITLE_PATTERN, "i");
 
+export function isWorkstationTitle(title: string): boolean {
+  return WORKSTATION_TITLE_RE.test(title);
+}
+
 function intelPattern(family: number, gen: number, tier: number) {
   // 8.ª y 9.ª tienen modelos de 4 dígitos (i9-9880H); de 10.ª en adelante, 5 o 6 (i9-12900H).
   const model = gen >= 10 ? `${gen}\\d{2,3}` : `${gen}\\d{3}`;

@@ -14,6 +14,7 @@ import { createCpuMatcher } from "../cpu/cpu-matcher.ts";
 import { lowSpecReason } from "../domain/min-specs.ts";
 import { createHighSpecMatcher } from "../domain/high-spec-exception.ts";
 import { isGpuSpecial } from "../domain/gpu-special.ts";
+import { isWorkstationTitle } from "../domain/workstation-models.ts";
 
 /**
  * Una regla por cada `excludePatterns` del config (data-driven: agregar una
@@ -224,6 +225,9 @@ function missingStorageRule(): ExclusionRule {
       const text = `${listing.title} ${listing.descriptionText}`;
       if (!mentionsNoStorage(text)) return { excluded: false };
       if (extractStorageGb(text) > 0) return { excluded: false };
+      // En una estación de trabajo se perdona: un SSD se compra aparte y la
+      // máquina vale por la CPU y la gráfica. Queda anotado ("sin disco").
+      if (isWorkstationTitle(listing.title)) return { excluded: false };
       return { excluded: true, reason: "missing_storage" };
     },
   };
