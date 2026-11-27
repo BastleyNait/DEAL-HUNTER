@@ -205,7 +205,9 @@ export class HuntService {
           const known =
             cpuMatcher.match(item.title) ??
             cpuMatcher.match(`${item.title} ${item.shortDescription}`) ??
-            (special ? specialMatcher.inferCpu(item.title, special) : null);
+            (special ? specialMatcher.inferCpu(item.title, special) : null) ??
+            // En estaciones de trabajo también valen i9 8.ª-12.ª e i7 9.ª.
+            workstationMatcher.matchCpu(item.title, item.shortDescription ?? "");
           // Estaciones de trabajo (P15s Gen 1, ZBook G8, Precision 3560...): la
           // generación sale del modelo aunque el título no diga la CPU.
           const workstation = known ? null : workstationMatcher.infer(item.title, item.shortDescription ?? "");

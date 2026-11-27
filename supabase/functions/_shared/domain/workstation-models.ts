@@ -21,6 +21,41 @@ const FAMILY_RE = /\b(?:core[\s™®]*)?i([3579])\b|\bi([3579])[\s-]?\d{4,5}/i;
 // Un modelo AMD del mismo chasis (P14s Gen 2 AMD) no es Intel.
 const AMD_RE = /\b(?:amd|ryzen)\b/i;
 
+/**
+ * Estaciones de trabajo confiables por el título: ThinkPad P, HP ZBook, Dell
+ * Precision. Mismo criterio que el tope de $260 (brandPriceCaps).
+ */
+export const WORKSTATION_TITLE_PATTERN =
+  "\\bthink\\s*pad\\s*p\\d|\\bp1[457][sv]?\\s*(?:gen|g)\\s*\\d|\\bp1\\s*gen\\s*\\d|\\b(?:lenovo|thinkpad)\\b.*\\bp[57][23]\\b|\\bzbook\\b|\\bprecision\\b";
+const WORKSTATION_TITLE_RE = new RegExp(WORKSTATION_TITLE_PATTERN, "i");
+
+function intelPattern(family: number, gen: number, tier: number) {
+  // 8.ª y 9.ª tienen modelos de 4 dígitos (i9-9880H); de 10.ª en adelante, 5 o 6 (i9-12900H).
+  const model = gen >= 10 ? `${gen}\\d{2,3}` : `${gen}\\d{3}`;
+  return {
+    label: `Intel i${family} ${gen}th gen`,
+    tier,
+    pattern: `\\bi${family}[\\s®™_-]*${model}[a-z0-9]{0,3}\\b|(?=.*\\bi${family}\\b)(?=.*\\b${gen}[\\s-]*(?:th)?[\\s-]*gen(?:eration)?\\b)`,
+    flags: "i",
+  };
+}
+
+/**
+ * CPUs que solo valen en una estación de trabajo: en una de estas, una i9 de
+ * 8.ª/9.ª o una i7 de 9.ª (P53, ZBook 15 G6, Precision 7540) sigue rindiendo
+ * para diseño y se revende bien; en una laptop común no se buscan. Las i9 de
+ * 10.ª a 12.ª tampoco estaban en la lista general. Tiers en la misma escala
+ * que cpuPatterns (i7 12.ª = 8).
+ */
+export const WORKSTATION_CPU_PATTERNS = [
+  intelPattern(9, 12, 8),
+  intelPattern(9, 11, 7),
+  intelPattern(9, 10, 5),
+  intelPattern(9, 9, 4),
+  intelPattern(9, 8, 3),
+  intelPattern(7, 9, 3),
+];
+
 export function familyOf(text: string): string | null {
   const m = text.match(FAMILY_RE);
   return m ? (m[1] ?? m[2]) : null;
@@ -31,7 +66,8 @@ export function createWorkstationModelMatcher(config: SearchConfig) {
     ...m,
     regex: new RegExp(m.pattern, m.flags),
   }));
-  const byLabel = new Map(config.cpuPatterns.map((p) => [p.label, p.tier]));
+  const byLabel = new Map([...config.cpuPatterns, ...WORKSTATION_CPU_PATTERNS].map((p) => [p.label, p.tier]));
+  const workstationCpus = WORKSTATION_CPU_PATTERNS.map((p) => ({ ...p, regex: new RegExp(p.pattern, p.flags) }));
   const matchFor = (family: string, generation: number): CpuMatch | null => {
     const label = `Intel i${family} ${generation}th gen`;
     const tier = byLabel.get(label);
@@ -43,6 +79,19 @@ export function createWorkstationModelMatcher(config: SearchConfig) {
     model(title: string) {
       if (AMD_RE.test(title)) return null;
       return models.find((m) => m.regex.test(title)) ?? null;
+    },
+
+    /**
+     * i9 (8.ª a 12.ª) o i7 de 9.ª dichas en el texto, solo si el título es de
+     * una estación de trabajo. Una Alienware o una MSI con i9 no entra por acá.
+     */
+    matchCpu(title: string, shortDescription = ""): CpuMatch | null {
+      if (!WORKSTATION_TITLE_RE.test(title)) return null;
+      for (const text of [title, `${title} ${shortDescription}`]) {
+        const hit = workstationCpus.find((p) => p.regex.test(text));
+        if (hit) return { label: hit.label, tier: hit.tier };
+      }
+      return null;
     },
 
     infer(title: string, shortDescription = ""): WorkstationInference | null {
@@ -122,4 +171,18 @@ export const DEFAULT_WORKSTATION_MODELS: WorkstationModelConfig[] = [
   precision(["3550", "3551", "5550", "5750", "7550", "7750"], 10),
   precision(["3560", "3561", "5560", "5760", "7560", "7760"], 11),
   precision(["3570", "3571", "5570", "5770", "7670", "7770"], 12),
+  // Generaciones anteriores. Sin decir i5/i7/i9 se supone i7 y se confirma con
+  // el detalle; en las de 8.ª solo vale la i9 (la i7 8.ª no se busca), así que
+  // ahí tiene que decir i9 en el título o el resumen.
+  // ThinkPad P53 / P73 = 9.ª, P52 / P72 = 8.ª, P1 Gen 2 = 9.ª, P1 Gen 1 = 8.ª.
+  { label: "ThinkPad P53/P73", pattern: "\\b(?:lenovo|thinkpad|think\\s*pad)\\b.*\\bp[57]3\\b", flags: "i", impliedIntelGeneration: 9 },
+  { label: "ThinkPad P52/P72", pattern: "\\b(?:lenovo|thinkpad|think\\s*pad)\\b.*\\bp[57]2\\b", flags: "i", impliedIntelGeneration: 8 },
+  lenovoGen("p1", 2, 9),
+  lenovoGen("p1", 1, 8),
+  // ZBook 15 / 17: G6 = 9.ª, G5 = 8.ª (las Firefly y 14u/15u de esos años son
+  // de bajo consumo, otra cosa: por eso solo las 15 y 17).
+  { label: "ZBook 15/17 G6", pattern: "\\bzbook\\s*1[57]\\s*g6\\b", flags: "i", impliedIntelGeneration: 9 },
+  { label: "ZBook 15/17 G5", pattern: "\\bzbook\\s*1[57]\\s*g5\\b", flags: "i", impliedIntelGeneration: 8 },
+  precision(["3541", "5540", "7540", "7740"], 9),
+  precision(["3530", "5530", "7530", "7730"], 8),
 ];

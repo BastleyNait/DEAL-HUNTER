@@ -1,5 +1,5 @@
 import type { SearchConfig } from "./types.ts";
-import { DEFAULT_WORKSTATION_MODELS } from "./workstation-models.ts";
+import { DEFAULT_WORKSTATION_MODELS, WORKSTATION_TITLE_PATTERN } from "./workstation-models.ts";
 
 /**
  * Valores por defecto. Son los que pediste al armar esto: laptops i7 10ma/11va,
@@ -296,7 +296,7 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     // tiene que ser de las buscadas (i7 10.ª-12.ª, i5 11.ª-12.ª).
     {
       label: "Estación de trabajo",
-      pattern: "\\bthink\\s*pad\\s*p\\d|\\bp1[457][sv]?\\s*(?:gen|g)\\s*\\d|\\bp1\\s*gen\\s*\\d|\\bzbook\\b|\\bprecision\\b",
+      pattern: WORKSTATION_TITLE_PATTERN,
       flags: "i",
       maxPriceUsd: 260,
     },
@@ -360,6 +360,21 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
     {
       query:
         '("zbook firefly", "zbook power", "zbook studio", "zbook fury", "precision 3550", "precision 3560", "precision 3570", "precision 5560", "precision 5570", "precision 7550", "precision 7560")',
+      sort: "newlyListed",
+      maxPages: 1,
+      maxPriceUsd: 500,
+    },
+    // Estaciones de generaciones anteriores (9.ª) e i9 de 8.ª a 12.ª: solo
+    // sirven en estaciones de trabajo (ver WORKSTATION_CPU_PATTERNS). +192
+    // llamadas por día; con las demás quedan ~4.500 de 5.000 en el peor caso.
+    {
+      query: '(p53, p73, "p1 gen 2", "zbook 15 g6", "zbook 17 g6", "precision 7540", "precision 7740", "precision 5540", "precision 3541")',
+      sort: "newlyListed",
+      maxPages: 1,
+      maxPriceUsd: 500,
+    },
+    {
+      query: "(i9-8950hk, i9-9880h, i9-9980hk, i9-10885h, i9-10980hk, i9-11950h, i9-12900h, i9-12950hx)",
       sort: "newlyListed",
       maxPages: 1,
       maxPriceUsd: 500,
