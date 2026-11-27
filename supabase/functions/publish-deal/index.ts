@@ -178,6 +178,68 @@ Deno.serve(async (req) => {
     return json({ data: { autoPublish: body.enabled } });
   }
 
+  // Prueba del bot de estaciones de trabajo: manda un mensaje de prueba a cada
+  // chat configurado y devuelve qué contestó Telegram (sin exponer el token).
+  if (body.action === "workstation-bot-test") {
+    const token = Deno.env.get("TELEGRAM_WORKSTATION_BOT_TOKEN");
+    const chatIds = (Deno.env.get("TELEGRAM_WORKSTATION_CHAT_IDS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (!token || chatIds.length === 0) return json({ data: { configured: false } });
+    const me = await fetch(`https://api.telegram.org/bot${token}/getMe`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
+    const sends = await Promise.all(
+      chatIds.map(async (chatId) => {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text: "🖥️ Prueba del bot de estaciones de trabajo: si ves esto, los avisos llegan." }),
+        });
+        const out = await res.json().catch(() => null);
+        return { chat: `…${chatId.slice(-4)}`, ok: res.ok, description: out?.description ?? null };
+      }),
+    );
+    return json({ data: { configured: true, bot: me?.result?.username ?? null, getMeOk: me?.ok ?? false, sends } });
+  }
+
+  // Reenvía al bot de estaciones publicaciones ya guardadas (por ejemplo, las
+  // que calificaron cuando el bot todavía no las tomaba). Solo ids de
+  // seen_listings: el texto se arma acá, no viene del pedido.
+  if (body.action === "workstation-send") {
+    const token = Deno.env.get("TELEGRAM_WORKSTATION_BOT_TOKEN");
+    const chatIds = (Deno.env.get("TELEGRAM_WORKSTATION_CHAT_IDS") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const ids = Array.isArray(body.itemIds) ? body.itemIds.map(String).slice(0, 30) : [];
+    if (!token || chatIds.length === 0 || ids.length === 0) return json({ error: "Sin bot o sin ids." }, 400);
+    const { data: rows, error } = await supabase
+      .from("seen_listings")
+      .select("item_id, title, price, cpu_match, gpu, url, cosmetic_note, seller_feedback_score, seller_feedback_percentage")
+      .in("item_id", ids);
+    if (error) return json({ error: error.message }, 500);
+    const byId = new Map((rows ?? []).map((r) => [r.item_id, r]));
+    const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let sent = 0;
+    for (const id of ids) {
+      const r = byId.get(id);
+      if (!r) continue;
+      const lines = [
+        "🖥️ <b>ESTACIÓN DE TRABAJO</b>",
+        `<b>${esc(r.title)}</b>`,
+        `💵 $${r.price} · ${esc(r.cpu_match ?? "")}${r.gpu ? ` · 🎮 ${esc(r.gpu)}` : ""}`,
+        r.cosmetic_note ? `🔍 ${esc(String(r.cosmetic_note).slice(0, 160))}` : null,
+        `👤 ${r.seller_feedback_score ?? "?"} ventas · ${r.seller_feedback_percentage ?? "?"}%`,
+        r.url,
+      ].filter(Boolean);
+      for (const chatId of chatIds) {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text: lines.join("\n"), parse_mode: "HTML" }),
+        });
+        if (res.ok) sent++;
+        else console.error("workstation-send:", await res.text());
+      }
+    }
+    if (sent > 0) await supabase.from("seen_listings").update({ notified_at: new Date().toISOString() }).in("item_id", ids);
+    return json({ data: { sent } });
+  }
+
   if (body.action === "facebook-queue") {
     try {
       const ids = Array.isArray(body.itemIds) ? body.itemIds.map(String) : undefined;

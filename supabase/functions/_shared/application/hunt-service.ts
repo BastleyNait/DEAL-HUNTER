@@ -526,7 +526,11 @@ export class HuntService {
     // Con el puntaje de estación (relativo a la gráfica y al precio), que es el
     // que va en el mensaje: el general le daba 100 a una T550 de $495.
     const picks = deals
-      .filter((d) => d.isGpuSpecial && isProfessionalGpuLabel(d.gpu))
+      // Cualquier estación de trabajo (ThinkPad P, ZBook, Precision), con o sin
+      // gráfica nombrada. Antes solo las de gráfica profesional del carril
+      // ESPECIAL GPU: de 160 que calificaron en una semana se avisaron 8, y se
+      // escapaban ZBook Firefly G8 a $190 o Precision 3551 a $185.
+      .filter((d) => isWorkstationTitle(d.title) || (d.isGpuSpecial && isProfessionalGpuLabel(d.gpu)))
       .map((d) => ({ ...d, score: workstationScore(d.price, d.gpu, d.score, d.isAuction) }))
       .filter((d) => d.score >= config.gpuSpecial.workstationAlertMinScore)
       .sort((a, b) => b.score - a.score);
